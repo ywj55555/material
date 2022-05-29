@@ -1,12 +1,6 @@
-import torch
-import torch.nn as nn
-import numpy as np
-import random
 import torch.distributed as dist
-from materialNet import *
-from torch.autograd import Variable
-from torch.utils.data import Dataset, DataLoader
-import os
+from model_block.materialNet import *
+from torch.utils.data import DataLoader
 import time
 from utils.init_seed import init_seeds
 from utils.os_helper import mkdir

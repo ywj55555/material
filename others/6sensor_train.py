@@ -1,15 +1,13 @@
-from materialNet import *
-import os
-from utils.os_helper import mkdir
+from model_block.materialNet import *
 # os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 # CUDA:0
-
+from utils.os_helper import mkdir
 mBatchSize = 32
 mEpochs = 300
 #mLearningRate = 0.001
 mLearningRate = 0.0001
 mDevice=torch.device("cuda")
-model_save = './ori_model_hz/'
+model_save = './6sensor_model/'
 mkdir(model_save)
 if __name__ == '__main__':
     seed = 2021
@@ -24,15 +22,15 @@ if __name__ == '__main__':
     # 使用非确定性算法
     torch.backends.cudnn.enabled = True
 
-    trainData, trainLabel = generateData('train_1', 300, 11, DATA_TYPE)
-    testData, testLabel = generateData('test_1', 300, 11, DATA_TYPE)
+    trainData, trainLabel = generateData_6sensor('train', 300, 11)
+    testData, testLabel = generateData_6sensor('test', 300, 11)
 
     trainDataset = MyDataset(trainData, trainLabel)
     testDataset = MyDataset(testData, testLabel)
     trainLoader = DataLoader(dataset=trainDataset, batch_size=mBatchSize, shuffle=True)
     testLoader = DataLoader(dataset=testDataset, batch_size=mBatchSize, shuffle=True)
 
-    model = MaterialSubModel(20, 4).cuda()
+    model = MaterialSubModel(6, 4).cuda()
 
     # criterion=nn.MSELoss()
     criterion = nn.SmoothL1Loss()
@@ -83,5 +81,5 @@ if __name__ == '__main__':
             testCorrect += (predictIndex == labelIndex).sum()
         print('test epoch:', epoch, ': ', testCorrect.item() / testTotal)
         print('\n')
-        if (epoch + 1) % 5 == 0:
-            torch.save(model.state_dict(), model_save+ str(epoch) + '.pkl')
+        # if (epoch + 1) % 5 == 0:
+        torch.save(model.state_dict(), model_save+ str(epoch) + '.pkl')

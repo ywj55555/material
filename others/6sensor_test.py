@@ -1,7 +1,4 @@
-from materialNet import *
-from data.utilNetNew import *
-from utils.load_spectral import *
-import cv2
+from model_block.materialNet import *
 import gc
 from utils.os_helper import *
 import csv
@@ -10,7 +7,7 @@ from utils.add_color import mask_color_img
 from utils.accuracy_helper import *
 from sklearn.metrics import f1_score
 import sys
-import os
+
 # os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 # CUDA:0
 

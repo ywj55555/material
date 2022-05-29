@@ -1,14 +1,6 @@
-from materialNet import *
-from data.utilNetNew import *
-from utils.load_spectral import *
-import cv2
-import gc
-from utils.os_helper import *
-import csv
+from model_block.materialNet import *
 from utils.accuracy_helper import *
-from sklearn.metrics import f1_score
 from utils.add_color import *
-import os
 from utils.os_helper import mkdir
 
 

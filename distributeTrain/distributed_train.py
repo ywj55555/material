@@ -1,16 +1,38 @@
-from materialNet import *
-import os
+from model_block.materialNet import *
+from utils.os_helper import mkdir
+# import torch.distributed as dist
+# import torch.multiprocessing as mp
+import torch.distributed as dist
+
 # os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 # CUDA:0
-from utils.os_helper import mkdir
+
 mBatchSize = 32
 mEpochs = 300
 #mLearningRate = 0.001
 mLearningRate = 0.0001
 mDevice=torch.device("cuda")
-model_save = './6sensor_model/'
+model_save = './ori_model_hz/'
 mkdir(model_save)
 if __name__ == '__main__':
+    # 1) 初始化
+    torch.distributed.init_process_group(backend="nccl")
+    # 2） 配置每个进程的gpu
+    local_rank = torch.distributed.get_rank()
+    torch.cuda.set_device(local_rank)
+    device = torch.device("cuda", local_rank)
+    # world_size = 2
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--local_rank', type=int, default=-1)
+    # # 添加必要参数
+    # # local_rank：系统自动赋予的进程编号，可以利用该编号控制打印输出以及设置device
+    #
+    # torch.distributed.init_process_group(backend="nccl", init_method='file://shared/sharedfile',
+    #                                      rank=parser.local_rank, world_size=world_size)
+
+    # world_size：所创建的进程数，也就是所使用的GPU数量
+    # （初始化设置详见参考文档）
+
     seed = 2021
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -23,15 +45,16 @@ if __name__ == '__main__':
     # 使用非确定性算法
     torch.backends.cudnn.enabled = True
 
-    trainData, trainLabel = generateData_6sensor('train', 300, 11)
-    testData, testLabel = generateData_6sensor('test', 300, 11)
+
+    trainData, trainLabel = generateData('train_hz', 300, 11, DATA_TYPE)
+    testData, testLabel = generateData('test_hz', 300, 11, DATA_TYPE)
 
     trainDataset = MyDataset(trainData, trainLabel)
     testDataset = MyDataset(testData, testLabel)
     trainLoader = DataLoader(dataset=trainDataset, batch_size=mBatchSize, shuffle=True)
     testLoader = DataLoader(dataset=testDataset, batch_size=mBatchSize, shuffle=True)
 
-    model = MaterialSubModel(6, 4).cuda()
+    model = MaterialSubModel(20, 4).cuda()
 
     # criterion=nn.MSELoss()
     criterion = nn.SmoothL1Loss()
@@ -82,5 +105,5 @@ if __name__ == '__main__':
             testCorrect += (predictIndex == labelIndex).sum()
         print('test epoch:', epoch, ': ', testCorrect.item() / testTotal)
         print('\n')
-        # if (epoch + 1) % 5 == 0:
-        torch.save(model.state_dict(), model_save+ str(epoch) + '.pkl')
+        if (epoch + 1) % 5 == 0:
+            torch.save(model.state_dict(), model_save+ str(epoch) + '.pkl')

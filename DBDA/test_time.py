@@ -1,19 +1,10 @@
-from materialNet import *
-from data.utilNetNew import *
+from model_block.materialNet import *
 from utils.load_spectral import *
-import cv2
 # import network
-import gc
-from utils.add_color import mask_color_img
-from utils.os_helper import *
-import csv
 from utils.accuracy_helper import *
-from sklearn.metrics import classification_report,f1_score
-from utils.os_helper import mkdir
-import math
 from utils.parse_args import parse_test_args
 import time
-import os
+
 # os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 # CUDA:0
 args = parse_test_args()

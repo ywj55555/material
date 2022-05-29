@@ -1,6 +1,4 @@
-import numpy as np
-
-from materialNet import *
+from model_block.materialNet import *
 import os
 from utils.os_helper import mkdir
 from utils.parse_args import parse_args
@@ -33,9 +31,12 @@ featureTrans = args.featureTrans#False#
 # dataType = dataTypelist[model_select-1]
 dataType = 'sea'
 print('featureTrans',featureTrans)
-select_bands = [2,36,54,61,77,82,87,91,95,104,108]
-select_bands = [x + 5 for x in  select_bands]
+# select_bands = [2,36,54,61,77,82,87,91,95,104,108]
+# select_bands = [x + 5 for x in  select_bands]
 
+select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
+# 最后一个epoch 选取结果 --》 109  98  81 116 125  90 112 127 108 118 100 123
+# 116 125 109 100 108  53  98  90  81 127 123  19
 # hashBand = hash(select_bands)
 # 换成小模型 11 通道 重新验证一下？？
 # select_bands = [x for x in range(128)]
@@ -92,7 +93,9 @@ if __name__ == '__main__':
     # 换清晰一点的视频
     # 改变训练标签
     # save_trainData_npy_path = './trainData/' + model_save[2:-1] + str(len(select_bands)) + '_mulprocess.npy'
-    save_trainData_npy_path = './trainData/' + "_" + bands_str + str(intervalSelect) + "_"  + str(featureTrans) + "_" + activa + '_mulprocess.npy'
+    save_npy_path = './trainData/'
+    mkdir(save_npy_path)
+    save_trainData_npy_path = save_npy_path + bands_str + str(intervalSelect) + "_"  + str(featureTrans) + "_" + activa + '_mulprocess.npy'
     # save_trainData_npy_path = './trainData/big_32_0.001_Falsemulprocess1.npy'
     print(save_trainData_npy_path)
     # multiProcessGenerateData(dataType, num, length, nora=True, class_nums=2, intervalSelect=True, featureTrans=True)
@@ -123,8 +126,9 @@ if __name__ == '__main__':
                 np.save(save_trainData_npy_path[:-4] + '_label.npy', trainLabel)
                 # np.save('./testData/testData.npy',testData)
                 # np.save('./testData/testLabel.npy',testLabel)
-            except:
+            except Exception as e:
                 print("error")
+                print(e)
                 sys.exit()
     else:
         trainData = np.load(save_trainData_npy_path)

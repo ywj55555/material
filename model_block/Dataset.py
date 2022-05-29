@@ -1,7 +1,10 @@
 import torch.nn as nn
+import torch
 from torch.utils.data import DataLoader
 from data.utilNetNew import *
 import os
+import sys
+# from utils.load_spectral import
 
 env_data_dir = '/data3/chenjialin/hangzhou_data/envi/'
 env_sh_data_dir = '/data3/chenjialin/hangzhou_data/envi_shanghai/'
@@ -53,17 +56,44 @@ class Dataset_patch(torch.utils.data.Dataset):
 
 class Dataset_all(torch.utils.data.Dataset):
     # file_list为文件列表
-    def __init__(self, file_list,data_path):
+    def __init__(self, file_list, img_path, label_path, select_train_bands, nora, featureTrans, activate=None, ):
         self.Data = file_list
-        self.data_path = data_path
+        self.img_path = img_path
+        self.label_path = label_path
+        self.select_train_bands = select_train_bands
+        self.activate = activate
+
+        self.featureTrans = featureTrans
+        self.nora = nora
+
     def __getitem__(self, index):
         # img = npy_loader(self.data_path + '/envi/',self.Data[index]) #返回9通道数据
         # img = np.load(self.data_path + '/envi/'+ self.Data[index]+'.npy')
         # img = transform2(img) #特征设计
-        img = np.load(self.data_path+'envi/'+ self.Data[index]+'.npy')
-        label = np.load(self.data_path+'label/'+ self.Data[index]+'_label.npy')
-        label = transformlabel(label) # 把gt转成 0，1，2，3，4
-        return img, label
+        # img = np.load(self.data_path+'envi/'+ self.Data[index]+'.npy')
+        # label = np.load(self.data_path+'label/'+ self.Data[index]+'_label.npy')
+        imgLabel = io.imread(self.label_path + self.Data[index] + '.png')
+        imgData = None
+        if os.path.exists(self.img_path + self.Data[index][3:] + '.img'):
+            imgData = envi_loader(self.img_path, self.Data[index][3:], self.select_train_bands, False)
+        else:
+            print(self.Data[index][3:] + '.img not exist!!!')
+            sys.exit()
+        # t3 = time.time()
+        # 没必要 特征变换 增加之前设计的斜率特征
+        if imgData is None:
+            print("Not Found ", self.Data[index][3:])
+            sys.exit()
+        # H W 22
+        if self.featureTrans:
+            print("kindsOfFeatureTransformation......")
+            # 11 -》 21
+            imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
+        else:
+            if self.nora:
+                print("normalizing......")
+                imgData = envi_normalize(imgData)
+        return imgData, imgLabel
     def __len__(self):
         return len(self.Data)
 

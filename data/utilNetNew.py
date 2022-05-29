@@ -1,7 +1,6 @@
 import gc
 import random
 
-import google.protobuf.internal.more_messages_pb2
 from skimage import io
 import math
 from multiprocessing import Process,Pool
@@ -39,9 +38,9 @@ video6_img_path = 'D:/ZF2121133HHX/20220407/vedio6/'
 video3_label_path = 'D:/ZF2121133HHX/20220407/video3_labels/'
 video6_label_path = 'D:/ZF2121133HHX/20220407/video6_labels/'
 
-waterLabelPath = 'D:/dataset/lg/Label_rename/'
+waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 
-waterImgRootPath = 'D:/dataset/lgimg/train/'
+waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 waterImgRootPathList = ['vedio1','vedio2','vedio3','vedio4','vedio5','vedio6','vedio7']

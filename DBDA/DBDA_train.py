@@ -1,6 +1,6 @@
 import sys
-from materialNet import *
-import network
+from model_block.materialNet import *
+from model_block import network
 import torch
 import numpy as np
 from utils.os_helper import mkdir
@@ -8,7 +8,7 @@ import time
 import random
 from utils.parse_args import parse_args
 from torch.autograd import Variable
-from DBDA_Conv import DBDA_network_MISH_full_conv
+from model_block.DBDA_Conv import DBDA_network_MISH_full_conv
 # from sklearn.metrics import classification_report
 # os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 # CUDA:0

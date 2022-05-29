@@ -1,13 +1,8 @@
-from materialNet import *
-from data.utilNetNew import *
+from model_block.materialNet import *
 from utils.load_spectral import *
-import cv2
 import gc
 from utils.add_color import mask_color_img
-from utils.os_helper import *
-import csv
 from utils.accuracy_helper import *
-from sklearn.metrics import classification_report,f1_score
 from utils.os_helper import mkdir
 import math
 from utils.parse_args import parse_test_args
@@ -26,19 +21,20 @@ log = './log/'
 mkdir(log)
 # env_data_dir = 'D:/ZF2121133HHX/20220407/vedio3/'
 env_data_dir = 'D:/ZF2121133HHX/20220407/vedio3/'
-waterLabelPath = 'D:/ZY2006224YWJ/python/ori_multi-category/finalLabel/'
+waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 # waterImgRootPath = 'D:/ZF2121133HHX/water/daytime/'
-waterImgRootPath = 'D:/dataset/lgimg/'
+waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 # waterImgRootPathList = ['vedio1', 'vedio2', 'vedio3', 'vedio4', 'vedio5', 'vedio6', 'vedio7']
 waterImgRootPathList = ['train']#test
-select_bands = [2,36,54,61,77,82,87,91,95,104,108]
-select_bands = [x + 5 for x in  select_bands]
+# select_bands = [2,36,54,61,77,82,87,91,95,104,108]
+# select_bands = [x + 5 for x in  select_bands]
+select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
 # select_bands = [x for x in range(128)]
 # imgpath
 label_data_dir = '/home/cjl/dataset/label/'
-png_path = 'D:/dataset/lg/needmark1/'
+png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
 # png_path = 'E:/tmp/water/daytime/rgb/'
 
 # csv2_save_path = log+'class4_allFile500_acc.csv'
@@ -46,16 +42,16 @@ png_path = 'D:/dataset/lg/needmark1/'
 class_nums = 2
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = "./tmp/"
+model_path = "./small_32_0.001_True_True_False_sig/"
 LEN = 5
 featureTrans = False
 if featureTrans:
     inputBands = 21
 else:
-    inputBands = 11
+    inputBands = len(select_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [77]]
+epoch_list = [str(x) for x in [1,2,3,4,6,7,8,9,120,150,180,230,250,280,299]]
 # epoch_list = [str(x) for x in []]
 # epoch_list = [str(x) for x in [299]]
 
@@ -80,7 +76,7 @@ for epoch in epoch_list:
     # model.load_state_dict(torch.load('./model/lr-4/' + epoch + '.pkl'))
     # model = MaterialBigModel(inputBands, class_nums,len_features = 32, mid_channel1 = 16).cuda()
     model = MaterialSubModel(inputBands, class_nums).cuda()
-    model.load_state_dict(torch.load(model_path + epoch + '_24_26' + '.pkl'))
+    model.load_state_dict(torch.load(model_path + epoch + '.pkl'))
     # 一定要加测试模式 有BN层或者dropout 的都需要，最好一直有
     # model.eval()
 

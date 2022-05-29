@@ -1,6 +1,5 @@
-import sys
-from materialNet import *
-import network
+from model_block.materialNet import *
+from model_block import network
 import torch
 import numpy as np
 from utils.os_helper import mkdir

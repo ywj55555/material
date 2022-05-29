@@ -1,11 +1,10 @@
-from materialNet import MaterialSubModel
-import os
+from model_block.materialNet import MaterialSubModel
 from utils.os_helper import mkdir
-from utils.cal_loss import *
-from utils.focalloss import *
-from sklearn.metrics import f1_score
-from Dataset import *
+from utils.focalloss import focus_loss
+from utils.cal_loss import focal_dice_loss
+from model_block.Dataset import *
 from data.dictNew import *
+from torch.autograd import Variable
 # os.environ['CUDA_VISIBLE_DEVICES'] = '5'
 # CUDA:0
 
@@ -16,10 +15,23 @@ mEpochs = 300
 mLearningRate = 0.0001
 # mLearningRate = 2.5e-05
 mDevice=torch.device("cuda")
-model_path = './small_model_whole_' + str(mLearningRate) + '_' + str(mtrainBatchSize) + '/'
-train_data_path = 'D:/dataset/lgimg/train/'
-# test_data = "/data3/ywj/test_sh_hz_data/"
+
+waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
+waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
+select_train_bands = [114, 109, 125,  53, 108,  81, 100, 112,  25,  90,  96, 123 ]
+input_bands_nums = len(select_train_bands)
+nora = True
+featureTrans = False
 class_num = 2
+
+model_path = './small_model_whole_' + str(mLearningRate) + '_' + str(mtrainBatchSize) + '_'\
+             + str(nora) + '_' + str(featureTrans)+'/'
+
+print('mBatchSize',mtrainBatchSize)
+print('mEpochs',mEpochs)
+print('mLearningRate',mLearningRate)
+print('nora',nora)
+
 if __name__ == '__main__':
     seed = 2021
     np.random.seed(seed)
@@ -34,15 +46,16 @@ if __name__ == '__main__':
     torch.backends.cudnn.enabled = True
     mkdir(model_path)
 
-    trainDataset = Dataset_all(SeaFile,train_data_path)
+    trainDataset = Dataset_all(SeaFile, waterImgRootPath, waterLabelPath, select_train_bands, nora, featureTrans)
     # testDataset = Dataset_all(testFile_hz,train_data)
     trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True)
     # testLoader = DataLoader(dataset=testDataset, batch_size=mtestBatchSize, shuffle=True)
 
-    model = MaterialSubModel(in_channels=20, out_channels=4).cuda()
+    model = MaterialSubModel(in_channels=input_bands_nums, out_channels=class_num).cuda()
     # model.load_state_dict(torch.load(r"/home/cjl/ywj_code/code/Multi-category_all/model_ori/4.pkl"))
     # criterion=nn.MSELoss()
-    criterion = nn.SmoothL1Loss()
+    # criterion = nn.SmoothL1Loss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=mLearningRate)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.8, last_epoch=-1)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=12,
@@ -66,11 +79,15 @@ if __name__ == '__main__':
             # trainTotal += label.size(0)
             # label1 = label  #B H W
             label1 = label.clone()
-            label2 = torch.stack([label, label], 3)  # B H W*4
+
+            # 用于保存原label中 0，1，2；0表示未标注，不参与训练
+            label2 = torch.stack([label for _ in range(class_num)], 3)  # B H W*4
             # label2 = torch.stack([label, label, label, label], 3) #B H W*4
             label2 = label2.permute(0, 3, 1, 2)  # B*C*H*W,
+
+            # 把 class_num 类别赋值为0：其他类别
             mask = torch.zeros(label.size()).to(mDevice)  # B*H*W
-            label = torch.where(label == class_num, mask, label)  # 第四类位置标0，0就代表其他类别
+            label = torch.where(label == class_num, mask, label)  # 第class_num类标签为0，0就代表其他类别
             label = label.long()  # index类型需转为整型
             one_hot = torch.nn.functional.one_hot(label, class_num) #2分类
             one_hot = one_hot.float()
@@ -82,24 +99,20 @@ if __name__ == '__main__':
             predict = model(img)  # B*CLASS_NUM*H*W
             # predict=model(img)
             predictIndex = torch.argmax(predict, dim=1) #计算一下准确率和召回率 B*H*W 和label1一样
-            label1[label1==0]=255 #255表示无标签位置
-            label1[label1==4]=0 #0表示其他类别位置
+            label1[label1 == 0] = 255  # 255表示无标签位置
+            label1[label1 == class_num] = 0  # 0表示其他类别位置
             label1 = label1.long()
             tlabel = label1.clone()
             count_right += torch.sum((predictIndex == label1) & (label1 != 255)).item()
             count_tot += torch.sum(label1 != 255).item()
-
-            # predictIndex = predictIndex.cpu().detach().numpy()
-            # label1 = label1.cpu().detach().numpy()
-
-            # label_list.append(label1)
-            # predict_list.append(predictIndex)
-            # print('label1:',label1.size())
-            # print('label2:',label2.size())
-            # print('one_hot:',one_hot.size())
-            # print('predict:',predict.size())
+            #  label2=0 的地方 是未标注区域，直接赋值为真实标签，相当于不训练！！！
             predict = torch.where(label2 == 0, one_hot, predict)  # label中没有标签的位置直接预测为真实值，也就相当于不参与loss的计算,而第四类转成了0，此时也会计算
-            loss = criterion(predict, one_hot)
+            # criterion 为 CrossEntropyLoss
+            loss = criterion(predict, label)
+
+            # criterion 为 SmoothL1Loss
+            # loss = criterion(predict, one_hot)
+
             # loss = focal_dice_loss(predict, one_hot,tlabel,0.5,weight_fun = 3,exp=10) #0,1,2,3,255
             # loss = focus_loss(class_num,predict, label)
             trainLossTotal += loss.item()

@@ -2,13 +2,10 @@
 每张图生成2250个测试像素，间隔取样2000个点左右（标注的点）展开成一维取样？？二维间隔取样才能保证稀疏性，更加模拟整图预测
 网格取样需要每一类单独计算间隔，然后按照每一类别数量在整图的比例进行取样
 '''
-from data.dictNew import testFile
-import numpy as np
-import cv2
 from tqdm import tqdm
 import csv
 import torch
-import network
+from model_block import network
 from utils.load_spectral import envi_loader
 from utils.accuracy_helper import *
 from utils.os_helper import mkdir
@@ -18,7 +15,7 @@ from utils.parse_args import parse_test_args
 import os
 import math
 import time
-from DBDA_Conv import DBDA_network_MISH_full_conv
+from model_block.DBDA_Conv import DBDA_network_MISH_full_conv
 from utils.add_color import mask_color_img
 
 waterLabelPath = 'D:/dataset/lg/Label_rename/'

@@ -1,26 +1,23 @@
-from materialNet import *
-from data.utilNetNew import *
-from utils.load_spectral import *
-import cv2
+from model_block.materialNet import *
 import gc
 from utils.add_color import mask_color_img
-from utils.os_helper import *
 import csv
 from utils.accuracy_helper import *
 from sklearn.metrics import f1_score
 from utils.os_helper import mkdir
 import math
-import os
+
 # os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 # CUDA:0
-FOR_TESTSET =  1
+
+FOR_TESTSET = 0
 file_str = {0:'_train_',1:'_test_'}
 log = './log/'
 mkdir(log)
 png_path = '/home/cjl/data/png/'
 npy_path = "/home/cjl/data/npy_trans/envi/"
 csv2_save_path = log+'mulpng'+file_str[FOR_TESTSET]+'hz_data.csv'
-model_path = '/home/cjl/ywj_code/code/ori_multi-category/ori_model_hz/'
+model_path = '/home/cjl/ywj_code/code/ori_multi-category/ddp_model/27.pkl'
 LEN = 5
 test_batch = 6
 color_class = [[0,0,255],[255,0,0],[0,255,0]]

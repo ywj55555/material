@@ -1,9 +1,9 @@
-import sys
-sys.path.append('../')
+# import sys
+# sys.path.append('../')
 import torch.nn as nn
 import torch
-from activation import mish
-from attontion import CAM_Module,PAM_Module
+from model_block.activation import mish
+from model_block.attontion import CAM_Module,PAM_Module
 import math
 class DBDA_network_MISH_full_conv(nn.Module):
     def __init__(self, band, classes,channnel1=24):
