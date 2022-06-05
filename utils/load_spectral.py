@@ -55,6 +55,9 @@ def envi_normalize(imgData):
     return imgData / (img_max+0.0001)
     # return imgData / img_max.reshape(imgData.shape[0], imgData.shape[1], 1)
 
+def envi_wholeMaxnormalize(imgData):
+    img_max =np.max(imgData)
+    return imgData / (img_max+0.0001)
 
 def transform(data, typeCode):
     row, col, channels = data.shape

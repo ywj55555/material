@@ -54,7 +54,7 @@ min_interval = [4,10]
 # 记录每张图 每一个类 取样了多少patch
 class_nums_record = {1:0,2:0}
 
-output_log = open('./log/output_generate.log','w')
+# output_log = open('./log/output_generate.log','w')
 
 # def generateData(dataType, num, length, selectMode=SELECT_RANDOM,nora = True,allband=True,feature=False,class_num=10,cut_num=10,per_class_num=None):
 #     Data = []
@@ -185,7 +185,7 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
     for file_order,file in enumerate(dataFile):
         print(file)
         print(file_order, "/" ,dataFile_LEN)
-        output_log.writelines(str(file_order)+ "/" + str(dataFile_LEN))
+        # output_log.writelines(str(file_order)+ "/" + str(dataFile_LEN))
         # 1 skin 2 cloth 3 other
         imgLabel = io.imread(labelpath + file + '.png')
         # t2 = time.time()
@@ -207,13 +207,13 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
         # H W 22
         if featureTrans:
             print("kindsOfFeatureTransformation......")
-            output_log.writelines("kindsOfFeatureTransformation......")
+            # output_log.writelines("kindsOfFeatureTransformation......")
             # 11 -》 21
             imgData = kindsOfFeatureTransformation_slope(imgData,activate, nora)
         else:
             if nora:
                 print("normalizing......")
-                output_log.writelines("normalizing......")
+                # output_log.writelines("normalizing......")
                 imgData = envi_normalize(imgData)
         # 11*11像素块 类别预测 作为中心像素类别 可以利用上下文信息 提升准确率
         # 分割出像素块 返回像素块和对应的类别
@@ -254,7 +254,7 @@ def multiProcessGenerateData(dataType, num, length, bands, activate, nora = True
     start = time.time()
     all_file_nums = len(dataFile)
     print("the len of dataFile is : ", all_file_nums)
-    output_log.writelines("the len of dataFile is : " + str(all_file_nums))
+    # output_log.writelines("the len of dataFile is : " + str(all_file_nums))
     perProcess = math.ceil(all_file_nums / process_nums)
     for i in range(process_nums):
         print(i)  # for循环会提前运行完毕，进程池内的任务还未执行。
@@ -286,8 +286,8 @@ def multiProcessGenerateData(dataType, num, length, bands, activate, nora = True
     all_process_label = np.array(all_process_label, dtype=np.int8)
     stop = time.time()
     print('seg data cost time is %s' % (stop - start))
-    output_log.writelines('seg data cost time is %s' % (stop - start))
-    output_log.close()
+    # output_log.writelines('seg data cost time is %s' % (stop - start))
+    # output_log.close()
     return all_process_data, all_process_label
 
 def convert_to_one_hot(y, C):
