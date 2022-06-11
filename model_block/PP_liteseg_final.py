@@ -189,7 +189,7 @@ class UAFM_SpAtten(UAFM):
         ksize (int, optional): The kernel size of the conv for x tensor. Default: 3.
         resize_mode (str, optional): The resize model in unsampling y tensor. Default: bilinear.
     """
-
+    # 没有使用 通道 attention
     def __init__(self, x_ch, y_ch, out_ch, ksize=3, resize_mode='nearest'):
         super().__init__(x_ch, y_ch, out_ch, ksize, resize_mode)
 
@@ -419,12 +419,14 @@ class STDCNet(nn.Module):
 
     def _make_layers(self, base, layers, block_num, block):
         features = []
+        # stride = 2 达到降采样目的
         features += [ConvBNRelu(self.input_channel, base // 2, 3, 2)]
         features += [ConvBNRelu(base // 2, base, 3, 2)]
 
         for i, layer in enumerate(layers):
             for j in range(layer):
                 if i == 0 and j == 0:
+                    # 最后一个参数为 stride = 2 ，尺寸减半，就是每个layer 的第一层尺寸先减半
                     features.append(block(base, base * 4, block_num, 2))
                 elif j == 0:
                     features.append(
@@ -527,7 +529,7 @@ class PPLiteSeg(nn.Module):
         self.seg_heads = nn.ModuleList()  # [..., head_16, head32]
         print("arm_out_chs:",arm_out_chs, " ; seg_head_inter_chs:",seg_head_inter_chs)
         for in_ch, mid_ch in zip(arm_out_chs, seg_head_inter_chs):
-            self.seg_heads.append(SegHead(in_ch, mid_ch, num_classes))
+            self.seg_heads.append(SegHead(in_ch, mid_ch, num_classes))  # to adjust feature
 
         # pretrained
         self.pretrained = pretrained
@@ -546,6 +548,9 @@ class PPLiteSeg(nn.Module):
         feats_selected = [feats_backbone[i] for i in self.backbone_indices]
 
         feats_head = self.ppseg_head(feats_selected)  # [..., x8, x16, x32]
+        # 看看feats_head的尺寸就好，然后在这里融合
+        for fea in feats_head:
+            print(fea.shape)
 
         if self.training:
             logit_list = []
@@ -616,7 +621,7 @@ class PPLiteSegHead(nn.Module):
                 x2, x4 and x8 are optional.
                 The length of in_feat_list and out_feat_list are the same.
         """
-
+        # 可选 提取空间上下文信息的 特征层级，默认只提取最高一层级，输出shape 和 输入 shape 一致！！！
         high_feat = self.cm(in_feat_list[-1])
         out_feat_list = []
 
@@ -673,12 +678,14 @@ class PPContextModule(nn.Module):
     def forward(self, input):
         out = None
         input_shape = input.shape[2:]
-
+        # print("PPContextModule:")
+        # print("original shape:", input_shape)
         for stage in self.stages:
             x = stage(input)
+            # print("after pooling shape:",x.shape)
             x = F.interpolate(
                 x,
-                input_shape,
+                input_shape, # 1/32 并不小啊，直接 1*1 resize 到 58，40，太粗糙了？最好修改一下这个参数
                 mode='nearest',
                 align_corners=self.align_corners)
             if out is None:
@@ -710,6 +717,178 @@ class SegHead(nn.Module):
         x = self.conv_out(x)
         return x
 
+
+# k s p = 3, 2, 1 1*1->3*3
+class SpectralExtraction(nn.Module):
+    def __init__(self, in_channels, spectral_inter_chs):
+        #  spectral_inter_chs 为列表形式，包含5个数，表示5各阶段的通道数量
+        super(SpectralExtraction, self).__init__()
+        self.spectralExtractionStage = nn.ModuleList()
+        assert len(spectral_inter_chs) == 5, "the len of spectral_inter_chs should be 5"
+        for i, layer in enumerate(spectral_inter_chs):
+            if i == 0:
+                per_stage = nn.Sequential(
+                    nn.Conv2d(in_channels, layer // 2, kernel_size=1, stride=1, padding=0),
+                    nn.LeakyReLU(),
+                    nn.Conv2d(layer // 2, layer, kernel_size=3, stride=2, padding=1),
+                    nn.LeakyReLU(),
+                    nn.Conv2d(layer, layer, kernel_size=1, stride=1, padding=0),
+                    nn.LeakyReLU()
+                )
+            else:
+                per_stage = nn.Sequential(
+                    nn.Conv2d(spectral_inter_chs[i-1], layer // 2, kernel_size=1, stride=1, padding=0),
+                    nn.LeakyReLU(),
+                    nn.Conv2d(layer // 2, layer, kernel_size=3, stride=2, padding=1),
+                    nn.LeakyReLU(),
+                    nn.Conv2d(layer, layer, kernel_size=1, stride=1, padding=0),
+                    nn.LeakyReLU()
+                )
+            self.spectralExtractionStage.append(per_stage)
+
+    def forward(self, x):
+        feature_list = []
+        for per_stage in self.spectralExtractionStage:
+            x = per_stage(x)
+            feature_list.append(x)
+        return feature_list
+
+
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+        assert kernel_size in (3, 5), 'kernel size must be 3 or 5'
+        padding = 2 if kernel_size == 5 else 1
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = torch.mean(x, dim=1, keepdim=True)
+        max_out, _ = torch.max(x, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = self.conv1(x)
+        return self.sigmoid(x)
+
+
+class PPLiteAddSpectralSeg(nn.Module):
+
+    def __init__(self,
+                 num_classes = 19,
+                 # backbone = STDC2(),
+                 input_channel=3,
+                 spectral_input_channels=12,
+                 spectral_inter_chs=[18, 24, 32, 64, 96],
+                 backbone_indices=[2, 3, 4],
+                 arm_type='UAFM_SpAtten',
+                 cm_bin_sizes=[4, 8, 16],
+                 cm_out_ch=128,
+                 # arm_out_chs=[64, 96, 128], #模型太大训练不起来
+                 arm_out_chs=[32, 64, 96],
+                 # seg_head_inter_chs=[64, 64, 64],
+                 seg_head_inter_chs=[32, 32, 32],
+                 resize_mode='nearest',
+                 pretrained=False):
+        super().__init__()
+
+        backbone = STDC2(input_channel)
+        assert hasattr(backbone, 'feat_channels'), \
+            "The backbone should has feat_channels."
+        assert len(backbone.feat_channels) >= len(backbone_indices), \
+            f"The length of input backbone_indices ({len(backbone_indices)}) should not be" \
+            f"greater than the length of feat_channels ({len(backbone.feat_channels)})."
+        assert len(backbone.feat_channels) > max(backbone_indices), \
+            f"The max value ({max(backbone_indices)}) of backbone_indices should be " \
+            f"less than the length of feat_channels ({len(backbone.feat_channels)})."
+        self.backbone = backbone
+        self.spectral_backbone = SpectralExtraction(spectral_input_channels, spectral_inter_chs)
+        self.spectralAttention_blocks = nn.ModuleList()
+
+        assert len(backbone_indices) > 1, "The lenght of backbone_indices " \
+                                          "should be greater than 1"
+        self.backbone_indices = backbone_indices  # [..., x16_id, x32_id]
+        backbone_out_chs = [backbone.feat_channels[i] for i in backbone_indices]
+        # 通道注意力
+        for i in range(len(self.backbone_indices)):
+            if i == 0:
+                self.spectralAttention_blocks.append(SpatialAttention(5))
+            else:
+                self.spectralAttention_blocks.append(SpatialAttention(3))
+
+        # head
+        if len(arm_out_chs) == 1:
+            arm_out_chs = arm_out_chs * len(backbone_indices)
+        assert len(arm_out_chs) == len(backbone_indices), "The length of " \
+                                                          "arm_out_chs and backbone_indices should be equal"
+
+        self.ppseg_head = PPLiteSegHead(backbone_out_chs, arm_out_chs,
+                                        cm_bin_sizes, cm_out_ch, arm_type,
+                                        resize_mode)
+
+        if len(seg_head_inter_chs) == 1:
+            seg_head_inter_chs = seg_head_inter_chs * len(backbone_indices)
+        assert len(seg_head_inter_chs) == len(backbone_indices), "The length of " \
+                                                                 "seg_head_inter_chs and backbone_indices should be equal"
+        self.seg_heads = nn.ModuleList()  # [..., head_16, head32]
+        print("arm_out_chs:",arm_out_chs, " ; seg_head_inter_chs:",seg_head_inter_chs)
+        for in_ch, mid_ch in zip(arm_out_chs, seg_head_inter_chs):
+            self.seg_heads.append(SegHead(in_ch, mid_ch, num_classes))  # to adjust feature
+
+        # pretrained
+        self.pretrained = pretrained
+        # self.init_weight()
+
+    def forward(self, x, y):
+        x_hw = x.shape[2:]
+        # print("x_hw:",x_hw)
+
+        feats_backbone = self.backbone(x)  # [x2, x4, x8, x16, x32]
+        spectral_feats_backbone = self.spectral_backbone(y)
+        # print(type(feats_backbone))
+        assert len(feats_backbone) >= len(self.backbone_indices), \
+            f"The nums of backbone feats ({len(feats_backbone)}) should be greater or " \
+            f"equal than the nums of backbone_indices ({len(self.backbone_indices)})"
+
+        feats_selected = [feats_backbone[i] for i in self.backbone_indices]
+        spectral_feats_selected = [spectral_feats_backbone[i] for i in self.backbone_indices]
+        # print("spectral_feats_selected")
+        # for fea in spectral_feats_selected:
+        #     print(fea.shape)
+        # 在这里进行融合，然后在使用 ppseg 融合
+        spectral_att = [spectralAttention_conv(spectral_feats_selected[i]) for i, spectralAttention_conv in
+                       enumerate(self.spectralAttention_blocks)]
+
+        feats_add_spectral = [feats_selected[i] * spectral_att[i] for i in range(len(self.backbone_indices))]
+
+        feats_head = self.ppseg_head(feats_add_spectral)  # [..., x8, x16, x32]
+        # 看看feats_head的尺寸就好，然后在这里融合, 应该在 ppseg_head 融合之前融合
+        # for fea in feats_head:
+        #     print(fea.shape)
+
+        if self.training:
+            logit_list = []
+
+            for x, seg_head in zip(feats_head, self.seg_heads):
+                x = seg_head(x)
+                logit_list.append(x)
+
+            logit_list = [
+                F.interpolate(
+                    x, x_hw, mode='bilinear', align_corners=None)
+                for x in logit_list
+            ]
+        else:
+            x = self.seg_heads[0](feats_head[0])
+            # print("x:",x.shape)
+            x = F.interpolate(x, x_hw, mode='bilinear', align_corners=None)
+            logit_list = [x]
+
+        return logit_list
+
+    # def init_weight(self):
+    #     if self.pretrained is not None:
+    #         utils.load_entire_model(self, self.pretrained)
+
+
 # 
 # def get_seg_model(**kwargs):
 #     model = PPLiteSeg(pretrained=False)
@@ -720,14 +899,20 @@ import warnings
 warnings.filterwarnings("ignore")
 from torch.cuda.amp import autocast, GradScaler
 if __name__ == "__main__":
-    model = PPLiteSeg(num_classes=3,input_channel=3).cuda()
+    cm_bin_sizes = [4, 8, 16]
+    spectral_inter_chs = [24, 32, 64, 96, 128]
+    # model = PPLiteSeg(num_classes=3, input_channel=3, cm_bin_sizes=cm_bin_sizes).cuda() # PPLiteAddSpectralSeg
+    model = PPLiteAddSpectralSeg(num_classes=3, input_channel=3, spectral_input_channels=12,
+                                 cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs).cuda()
     model.train()
     # model.eval()
-    x = torch.randn(2, 11, 1415, 1859).cuda()
+    x = torch.randn(2, 3, 1415, 1859).cuda()
+    y = torch.randn(2, 12, 1415, 1859).cuda()
     import numpy as np
     label = np.random.randint(0,3,(2, 1415, 1859))
     label = torch.from_numpy(label).cuda()
-    y = model(x)
+    output = model(x, y)
+    # output = model(x)
     from criterion import OhemCrossEntropy
     criterion = OhemCrossEntropy(ignore_label=0,
                                  thres=0.9,
@@ -740,12 +925,15 @@ if __name__ == "__main__":
     # print(len(y))
     # for i in range(len(y)):
     #     print(y[i].shape)
-    losses = criterion(y, label)
+
+    # spect_data = torch.randn(2, 12, 1415, 1859).cuda()
+    # feats = model2(spect_data)
+    # for feat in feats:
+    #     print(feat.shape)
+    losses = criterion(output, label)
     torch.unsqueeze(losses, 0)
     print(losses.shape)
     loss = losses.mean()
-    print(loss.shape)
+    # print(loss.shape)
     scaler = GradScaler()
     scaler.scale(loss).backward()
-    # loss.backward()
-    print(loss.shape)

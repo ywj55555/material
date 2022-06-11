@@ -22,6 +22,14 @@ def judegHdrDataType(hdr_dirpath, file):
         data[5] = 'data type = 12\n'
         modify_flag = True
         # raise HdrDataTypeError("data type = 2, but data type should be 12")
+
+    if data[6].split(' =')[0] != 'byte order':
+        data.insert(6, 'byte order = 0\n')
+        modify_flag = True
+    else:
+        if data[6] != 'byte order = 0\n':
+            data[6] = 'byte order = 0\n'
+            modify_flag = True
     if modify_flag:
         with open(hdr_dirpath + "/" + file + '.hdr', "w") as f:
             f.writelines(data)

@@ -87,9 +87,45 @@ class Dataset_all(torch.utils.data.Dataset):
             imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
         else:
             if self.nora:
-                print("normalizing......")
-                imgData = envi_normalize(imgData)
+                # print("normalizing......")
+                imgData = envi_wholeMaxnormalize(imgData)
         return imgData, imgLabel
+    def __len__(self):
+        return len(self.Data)
+
+class DatasetSpectralAndRgb(torch.utils.data.Dataset):
+    # file_list为文件列表
+    def __init__(self, file_list, img_path, label_path, rbg_path, select_train_bands, nora, featureTrans, activate=None):
+        self.Data = file_list
+        self.img_path = img_path
+        self.rbg_path = rbg_path
+        self.label_path = label_path
+        self.select_train_bands = select_train_bands
+        self.activate = activate
+        self.featureTrans = featureTrans
+        self.nora = nora
+
+    def __getitem__(self, index):
+        imgLabel = io.imread(self.label_path + self.Data[index] + '.png')
+        imgData = None
+        if os.path.exists(self.img_path + self.Data[index][3:] + '.img'):
+            imgData = envi_loader(self.img_path, self.Data[index][3:], self.select_train_bands, False)
+        else:
+            print(self.Data[index][3:] + '.img not exist!!!')
+            sys.exit()
+        if imgData is None:
+            print("Not Found ", self.Data[index][3:])
+            sys.exit()
+        if self.featureTrans:
+            print("kindsOfFeatureTransformation......")
+            # 11 -》 21
+            imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
+        else:
+            if self.nora:
+                imgData = envi_normalize(imgData)
+        rgbData = cv2.imread(self.rbg_path + self.Data[index] + '.png')  # 加载模式为 BGR
+        rgbData = rgbData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+        return imgData, rgbData.copy(), imgLabel
     def __len__(self):
         return len(self.Data)
 

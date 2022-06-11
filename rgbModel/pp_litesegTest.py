@@ -29,13 +29,15 @@ env_data_dir = 'D:/ZF2121133HHX/20220407/vedio3/'
 waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 # waterImgRootPath = 'D:/ZF2121133HHX/water/daytime/'
 waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
+hangzhou_img_path = '/home/cjl/ssd/dataset/hangzhou/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 # waterImgRootPathList = ['vedio1', 'vedio2', 'vedio3', 'vedio4', 'vedio5', 'vedio6', 'vedio7']
 waterImgRootPathList = ['train']#test
 # select_bands = [2,36,54,61,77,82,87,91,95,104,108]
 # select_bands = [x + 5 for x in  select_bands]
-select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
+select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 92]  # 模型选择结果波段
+# select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
 # select_bands = [x for x in range(128)]
 # imgpath
 label_data_dir = '/home/cjl/dataset/label/'
@@ -48,16 +50,16 @@ hz_png_path = '/home/cjl/ssd/dataset/hangzhou/rgb/'
 class_nums = 2
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = './PPLiteSeg_500000_0.001_4/'
+model_path = './PPLiteSeg_Spectral_500000_0.001_4_1217/'
 LEN = 5
 featureTrans = False
 if featureTrans:
     inputBands = 21
 else:
-    inputBands = len(select_bands)
+    inputBands = len(select_train_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [198, 200]]
+epoch_list = [str(x) for x in [299, 198, 100,50,30,20,10]]
 
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
@@ -86,7 +88,7 @@ for epoch in epoch_list:
     # model.load_state_dict(torch.load('./model/lr-4/' + epoch + '.pkl'))
     # model = MaterialBigModel(inputBands, class_nums,len_features = 32, mid_channel1 = 16).cuda()
     # model = MaterialSubModel(inputBands, class_nums).cuda()
-    model = PPLiteSeg(num_classes=3, input_channel=3).cuda()
+    model = PPLiteSeg(num_classes=3, input_channel=inputBands).cuda()
     model.load_state_dict(torch.load(model_path + epoch + '.pkl'))
     model.eval()  # 测试
     # 一定要加测试模式 有BN层或者dropout 的都需要，最好一直有
@@ -126,39 +128,36 @@ for epoch in epoch_list:
         file_tmp = file_list[i*test_batch:(i+1)*test_batch if (i+1)<cnt else len(file_list)]
         imgData = []
         for filename in file_tmp:
-            if os.path.exists(png_path + filename + '.png'):
-                imgData_tmp = cv2.imread(png_path + filename + '.png')
-            else:
-                imgData_tmp = cv2.imread(hz_png_path + filename + '.png')
-            imgData_tmp = imgData_tmp.astype(np.float64)[:, :, ::-1]
-            imgData.append(imgData_tmp)
-            # imgData_tmp = None
-            # if os.path.exists(waterImgRootPath + filename + '.img'):
-            #     imgData_tmp = envi_loader(waterImgRootPath, filename, select_bands, False)
+            # if os.path.exists(png_path + filename + '.png'):
+            #     imgData_tmp = cv2.imread(png_path + filename + '.png')
             # else:
-            #     for tmpImgPath in waterImgRootPathList:
-            #         if os.path.exists(waterImgRootPath + tmpImgPath + '/' + filename + '.img'):
-            #             imgData_tmp = envi_loader(waterImgRootPath + tmpImgPath + '/', filename, select_bands, False)
-            #             break
+            #     imgData_tmp = cv2.imread(hz_png_path + filename + '.png')
+            # imgData_tmp = imgData_tmp.astype(np.float64)[:, :, ::-1]
+            # imgData.append(imgData_tmp)
+            imgData_tmp = None
+            if os.path.exists(waterImgRootPath + filename[3:] + '.img'):
+                imgData_tmp = envi_loader(waterImgRootPath, filename[3:], select_train_bands, False)
+            elif os.path.exists(hangzhou_img_path + filename[3:] + '.img'):
+                imgData_tmp = envi_loader(hangzhou_img_path, filename[3:], select_train_bands, False)
             # # t3 = time.time()
             # # 没必要 特征变换 增加之前设计的斜率特征
             #
-            # if imgData_tmp is None:
-            #     print("Not Found ", filename)
-            #     continue
-            # if featureTrans:
-            #     imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
-            # else:
-            #     print("normalizing......")
-            #     imgData_tmp = envi_normalize(imgData_tmp)
-            # imgData_tmp = envi_loader(env_data_dir, filename, True)
-            # envi_loader(imgpath, file[3:], nora)
-            # imgData_tmp = transform2(imgData_tmp)
+            if imgData_tmp is None:
+                print("Not Found ", filename)
+                continue
+            if featureTrans:
+                imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
+            else:
+                # if nora
+                print("normalizing......")
+                imgData_tmp = envi_wholeMaxnormalize(imgData_tmp)
+                # imgData_tmp = envi_normalize(imgData_tmp)
+            imgData.append(imgData_tmp)
         imgData = np.array(imgData)
         inputData = torch.tensor(imgData).float().cuda()
-        inputData = inputData / 255.0
-        inputData -= mean
-        inputData /= std
+        # inputData = inputData / 255.0
+        # inputData -= mean
+        # inputData /= std
         inputData = inputData.permute(0, 3, 1, 2)
         with torch.no_grad():
             torch.cuda.empty_cache()
