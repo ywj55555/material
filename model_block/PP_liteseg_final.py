@@ -773,7 +773,7 @@ class SpatialAttention(nn.Module):
 class PPLiteAddSpectralSeg(nn.Module):
 
     def __init__(self,
-                 num_classes = 19,
+                 num_classes = 3,
                  # backbone = STDC2(),
                  input_channel=3,
                  spectral_input_channels=12,

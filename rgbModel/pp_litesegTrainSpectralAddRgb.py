@@ -129,8 +129,8 @@ if __name__ == '__main__':
             rgb_data -= mean
             rgb_data /= std
             rgb_data = rgb_data.permute(0, 3, 1, 2)
-            with autocast():
-                predict = model(rgb_data, img)  # B*CLASS_NUM*H*W
+            # with autocast():
+            predict = model(rgb_data, img)  # B*CLASS_NUM*H*W
             losses = criterion(predict, label)
             torch.unsqueeze(losses, 0)
             # print(losses.shape)
@@ -149,6 +149,11 @@ if __name__ == '__main__':
             # tlabel = label1.clone()
             count_right += torch.sum((predictIndex == label) & (label != 0)).item()
             count_tot += torch.sum(label != 0).item()
+            del predict
+            del img
+            del rgb_data, label
+            torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
             # #  label2=0 的地方 是未标注区域，直接赋值为真实标签，相当于不训练！！！
             # predict = torch.where(label2 == 0, one_hot, predict)  # label中没有标签的位置直接预测为真实值，也就相当于不参与loss的计算,而第四类转成了0，此时也会计算
             # # criterion 为 CrossEntropyLoss
@@ -171,6 +176,7 @@ if __name__ == '__main__':
         print('train epoch:', epoch, ': ', accuracy)
         scheduler.step(accuracy)
         print('learning rate = ', optimizer.state_dict()['param_groups'][0]['lr'])
+        torch.save(model.state_dict(), model_path + str(epoch) + '.pkl')
         # label_list = np.array(label_list).flatten()
         # predict_list = np.array(predict_list).flatten()
         # print('label_shape: ',label_list.shape)
@@ -263,4 +269,4 @@ if __name__ == '__main__':
         # scheduler.step()
         # scheduler.step(accuracy)
         # if (epoch + 1) % 5 == 0:
-        torch.save(model.state_dict(), model_path + str(epoch) + '.pkl')
+        # torch.save(model.state_dict(), model_path + str(epoch) + '.pkl')
