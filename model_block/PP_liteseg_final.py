@@ -16,6 +16,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import sys
+sys.path.append('../')
+from model_block.UAFM import UAFM_ChAtten
 
 
 class ConvBN(nn.Module):
@@ -212,6 +215,8 @@ class UAFM_SpAtten(UAFM):
         out = x * atten + y * (1 - atten)
         out = self.conv_out(out)
         return out
+
+
 
 
 class CatBottleneck(nn.Module):
@@ -889,6 +894,139 @@ class PPLiteAddSpectralSeg(nn.Module):
     #         utils.load_entire_model(self, self.pretrained)
 
 
+class PPLiteRgbCatSpectral(nn.Module):
+
+    def __init__(self,
+                 num_classes = 3,
+                 # backbone = STDC2(),
+                 input_channel=3,
+                 spectral_input_channels=12,
+                 spectral_inter_chs=[18, 24, 32, 64, 96],
+                 backbone_indices=[2, 3, 4],
+                 arm_type='UAFM_SpAtten',
+                 spectral_arm_type='UAFM_ChAtten',
+                 cm_bin_sizes=[4, 8, 16],
+                 cm_out_ch=128,
+                 # arm_out_chs=[64, 96, 128], #模型太大训练不起来
+                 arm_out_chs=[32, 64, 96],
+                 # seg_head_inter_chs=[64, 64, 64],
+                 seg_head_inter_chs=[32, 32, 32],
+                 resize_mode='nearest',
+                 pretrained=False):
+        super().__init__()
+
+        backbone = STDC2(input_channel)
+        assert hasattr(backbone, 'feat_channels'), \
+            "The backbone should has feat_channels."
+        assert len(backbone.feat_channels) >= len(backbone_indices), \
+            f"The length of input backbone_indices ({len(backbone_indices)}) should not be" \
+            f"greater than the length of feat_channels ({len(backbone.feat_channels)})."
+        assert len(backbone.feat_channels) > max(backbone_indices), \
+            f"The max value ({max(backbone_indices)}) of backbone_indices should be " \
+            f"less than the length of feat_channels ({len(backbone.feat_channels)})."
+        self.backbone = backbone
+        self.spectral_backbone = SpectralExtraction(spectral_input_channels, spectral_inter_chs)
+        self.spectralAttention_blocks = nn.ModuleList()
+
+        assert len(backbone_indices) > 1, "The lenght of backbone_indices " \
+                                          "should be greater than 1"
+        self.backbone_indices = backbone_indices  # [..., x16_id, x32_id]
+        backbone_out_chs = [backbone.feat_channels[i] for i in backbone_indices]
+        spectral_backbone_out_chs = [spectral_inter_chs[i] for i in backbone_indices]
+        # 通道注意力
+        for i in range(len(self.backbone_indices)):
+            if i == 0:
+                self.spectralAttention_blocks.append(SpatialAttention(5))
+            else:
+                self.spectralAttention_blocks.append(SpatialAttention(3))
+
+        # head
+        if len(arm_out_chs) == 1:
+            arm_out_chs = arm_out_chs * len(backbone_indices)
+        assert len(arm_out_chs) == len(backbone_indices), "The length of " \
+                                                          "arm_out_chs and backbone_indices should be equal"
+
+        self.ppseg_head = PPLiteSegHead(backbone_out_chs, arm_out_chs,
+                                        cm_bin_sizes, cm_out_ch, arm_type,
+                                        resize_mode)
+
+        self.spectral_seg_head = PPLiteSegHead(spectral_backbone_out_chs, arm_out_chs,
+                                        cm_bin_sizes, cm_out_ch, spectral_arm_type,
+                                        resize_mode)
+
+        if len(seg_head_inter_chs) == 1:
+            seg_head_inter_chs = seg_head_inter_chs * len(backbone_indices)
+        assert len(seg_head_inter_chs) == len(backbone_indices), "The length of " \
+                                                                 "seg_head_inter_chs and backbone_indices should be equal"
+        self.seg_heads = nn.ModuleList()  # [..., head_16, head32]
+        print("arm_out_chs:",arm_out_chs, " ; seg_head_inter_chs:",seg_head_inter_chs)
+        for in_ch, mid_ch in zip(arm_out_chs, seg_head_inter_chs):
+            self.seg_heads.append(SegHead(in_ch * 2, mid_ch, num_classes))  # to adjust feature
+
+        # pretrained
+        self.pretrained = pretrained
+        # self.init_weight()
+
+    def forward(self, x, y):
+        x_hw = x.shape[2:]
+        # print("x_hw:",x_hw)
+
+        feats_backbone = self.backbone(x)  # [x2, x4, x8, x16, x32]
+        spectral_feats_backbone = self.spectral_backbone(y)
+        # print(type(feats_backbone))
+        assert len(feats_backbone) >= len(self.backbone_indices), \
+            f"The nums of backbone feats ({len(feats_backbone)}) should be greater or " \
+            f"equal than the nums of backbone_indices ({len(self.backbone_indices)})"
+
+        feats_selected = [feats_backbone[i] for i in self.backbone_indices]
+        spectral_feats_selected = [spectral_feats_backbone[i] for i in self.backbone_indices]
+        # print("spectral_feats_selected")
+        # for fea in spectral_feats_selected:
+        #     print(fea.shape)
+        # print("feats_selected")
+        # for fea in feats_selected:
+        #     print(fea.shape)
+        # 在这里进行融合，然后在使用 ppseg 融合
+        # 如果使用注意力的话，最好也参加 loss 的计算！！！
+        # spectral_att = [spectralAttention_conv(spectral_feats_selected[i]) for i, spectralAttention_conv in
+        #                enumerate(self.spectralAttention_blocks)]
+
+        # feats_add_spectral = [feats_selected[i] * spectral_att[i] for i in range(len(self.backbone_indices))]
+
+        feats_head = self.ppseg_head(feats_selected)  # [..., x8, x16, x32]
+        spectral_feats_head = self.spectral_seg_head(spectral_feats_selected)  # [..., x8, x16, x32]
+        feats_head_add_spectral = [torch.cat((feats_head_single, spectral_feats_head_single), dim=1) for
+                                   feats_head_single,spectral_feats_head_single in
+                                   zip(feats_head, spectral_feats_head)]
+        # 看看feats_head的尺寸就好，然后在这里融合, 应该在 ppseg_head 融合之前融合
+        # for fea in feats_head:
+        #     print(fea.shape)
+
+        if self.training:
+            logit_list = []
+
+            # for x, seg_head in zip(feats_head, self.seg_heads):
+            for x, seg_head in zip(feats_head_add_spectral, self.seg_heads):
+                x = seg_head(x)
+                logit_list.append(x)
+
+            logit_list = [
+                F.interpolate(
+                    x, x_hw, mode='bilinear', align_corners=None)
+                for x in logit_list
+            ]
+        else:
+            x = self.seg_heads[0](feats_head_add_spectral[0])
+            # print("x:",x.shape)
+            x = F.interpolate(x, x_hw, mode='bilinear', align_corners=None)
+            logit_list = [x]
+
+        return logit_list
+
+    # def init_weight(self):
+    #     if self.pretrained is not None:
+    #         utils.load_entire_model(self, self.pretrained)
+
 # 
 # def get_seg_model(**kwargs):
 #     model = PPLiteSeg(pretrained=False)
@@ -902,16 +1040,19 @@ if __name__ == "__main__":
     cm_bin_sizes = [4, 8, 16]
     spectral_inter_chs = [24, 32, 64, 96, 128]
     # model = PPLiteSeg(num_classes=3, input_channel=3, cm_bin_sizes=cm_bin_sizes).cuda() # PPLiteAddSpectralSeg
-    model = PPLiteAddSpectralSeg(num_classes=3, input_channel=3, spectral_input_channels=12,
+    model = PPLiteRgbCatSpectral(num_classes=3, input_channel=3, spectral_input_channels=12,
                                  cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs).cuda()
-    model.train()
-    # model.eval()
+    # model.train()
+    model.eval()
     x = torch.randn(2, 3, 1415, 1859).cuda()
     y = torch.randn(2, 12, 1415, 1859).cuda()
     import numpy as np
     label = np.random.randint(0,3,(2, 1415, 1859))
     label = torch.from_numpy(label).cuda()
-    output = model(x, y)
+    with torch.no_grad():
+        output = model(x, y)
+    print(len(output))
+    print(output[0].shape)
     # output = model(x)
     from criterion import OhemCrossEntropy
     criterion = OhemCrossEntropy(ignore_label=0,
@@ -930,10 +1071,10 @@ if __name__ == "__main__":
     # feats = model2(spect_data)
     # for feat in feats:
     #     print(feat.shape)
-    losses = criterion(output, label)
-    torch.unsqueeze(losses, 0)
-    print(losses.shape)
-    loss = losses.mean()
-    # print(loss.shape)
-    scaler = GradScaler()
-    scaler.scale(loss).backward()
+    # losses = criterion(output, label)
+    # torch.unsqueeze(losses, 0)
+    # print(losses.shape)
+    # loss = losses.mean()
+    # # print(loss.shape)
+    # scaler = GradScaler()
+    # scaler.scale(loss).backward()
