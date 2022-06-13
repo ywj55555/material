@@ -113,40 +113,40 @@ class DatasetSpectralAndRgb(torch.utils.data.Dataset):
             imgLabel = io.imread(self.label_path + self.Data[index] + '.png')
         else:
             imgLabel = io.imread(hz_label + self.Data[index] + '.png')
-        # imgData = None
-        # if os.path.exists(self.img_path + self.Data[index][3:] + '.img'):
-        #     imgData = envi_loader(self.img_path, self.Data[index][3:], self.select_train_bands, False)
-        # else:
-        #     print(self.Data[index][3:] + '.img not exist!!!')
-        #     sys.exit()
-        # if imgData is None:
-        #     print("Not Found ", self.Data[index][3:])
-        #     sys.exit()
-        # if self.featureTrans:
-        #     print("kindsOfFeatureTransformation......")
-        #     # 11 -》 21
-        #     imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
-        # else:
-        #     if self.nora:
-        #         imgData = envi_normalize(imgData)
-        # rgbData = cv2.imread(self.rbg_path + self.Data[index] + '.png')  # 加载模式为 BGR
-        # rgbData = rgbData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
-        imgData_tmp = None
-        if os.path.exists(waterImgRootPath + self.Data[index][3:] + '.img'):
-            imgData_tmp = envi_loader(waterImgRootPath, self.Data[index][3:], self.select_train_bands, False)
-        elif os.path.exists(hangzhou_img_path + self.Data[index][3:] + '.img'):
-            imgData_tmp = envi_loader(hangzhou_img_path, self.Data[index][3:], self.select_train_bands, False)
+        imgData = None
+        if os.path.exists(self.img_path + self.Data[index][3:] + '.img'):
+            imgData = envi_loader(self.img_path, self.Data[index][3:], self.select_train_bands, False)
+        else:
+            print(self.Data[index][3:] + '.img not exist!!!')
+            sys.exit()
+        if imgData is None:
+            print("Not Found ", self.Data[index][3:])
+            sys.exit()
         if self.featureTrans:
-            imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
+            print("kindsOfFeatureTransformation......")
+            # 11 -》 21
+            imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
         else:
-            imgData_tmp = envi_normalize(imgData_tmp)
-        if os.path.exists(png_path + self.Data[index] + '.png'):
-            rgbData_tmp = cv2.imread(png_path + self.Data[index] + '.png')
-        else:
-            rgbData_tmp = cv2.imread(hz_png_path + self.Data[index] + '.png')
-        rgbData_tmp = rgbData_tmp.astype(np.float64)[:, :, ::-1]
-        # return imgData, rgbData.copy(), imgLabel
-        return imgData_tmp, rgbData_tmp.copy(), imgLabel
+            if self.nora:
+                imgData = envi_normalize(imgData)
+        rgbData = cv2.imread(self.rbg_path + self.Data[index] + '.png')  # 加载模式为 BGR
+        rgbData = rgbData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+        # imgData_tmp = None
+        # if os.path.exists(waterImgRootPath + self.Data[index][3:] + '.img'):
+        #     imgData_tmp = envi_loader(waterImgRootPath, self.Data[index][3:], self.select_train_bands, False)
+        # elif os.path.exists(hangzhou_img_path + self.Data[index][3:] + '.img'):
+        #     imgData_tmp = envi_loader(hangzhou_img_path, self.Data[index][3:], self.select_train_bands, False)
+        # if self.featureTrans:
+        #     imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
+        # else:
+        #     imgData_tmp = envi_normalize(imgData_tmp)
+        # if os.path.exists(png_path + self.Data[index] + '.png'):
+        #     rgbData_tmp = cv2.imread(png_path + self.Data[index] + '.png')
+        # else:
+        #     rgbData_tmp = cv2.imread(hz_png_path + self.Data[index] + '.png')
+        # rgbData_tmp = rgbData_tmp.astype(np.float64)[:, :, ::-1]
+        return imgData, rgbData.copy(), imgLabel
+        # return imgData_tmp, rgbData_tmp.copy(), imgLabel
     def __len__(self):
         return len(self.Data)
 

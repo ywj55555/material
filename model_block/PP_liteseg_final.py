@@ -554,8 +554,8 @@ class PPLiteSeg(nn.Module):
 
         feats_head = self.ppseg_head(feats_selected)  # [..., x8, x16, x32]
         # 看看feats_head的尺寸就好，然后在这里融合
-        for fea in feats_head:
-            print(fea.shape)
+        # for fea in feats_head:
+        #     print(fea.shape)
 
         if self.training:
             logit_list = []

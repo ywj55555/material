@@ -25,6 +25,7 @@ from utils.os_helper import mkdir
 from torch.utils.data.distributed import DistributedSampler
 from utils.mySampler import SequentialDistributedSampler
 from sklearn.metrics import classification_report
+from torch.cuda.amp import autocast, GradScaler
 # 1) 初始化
 dist.init_process_group(backend="nccl")
 
@@ -82,8 +83,7 @@ print('mLearningRate',mLearningRate)
 print('featureTrans', featureTrans)
 print('min_kept', min_kept)
 print('nora',nora)
-mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
-std = torch.tensor([0.5, 0.5, 0.5]).cuda()
+
 # data_size = 90
 
 #用于平均loss和acc
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     trainLoader = DataLoader(dataset=trainDataset,
                              batch_size=batch_size,
                              sampler=DistributedSampler(trainDataset))
-    test_sampler = SequentialDistributedSampler(testDataset,batch_size=16)
+    test_sampler = SequentialDistributedSampler(testDataset,batch_size=batch_size)
     testLoader =DataLoader(dataset=testDataset,
                              batch_size=batch_size,
                              sampler=test_sampler)
@@ -155,16 +155,27 @@ if __name__ == '__main__':
     #         print("  In Model: input size", input.size(),
     #               "output size", output.size())
     #         return output
-    model = network.DBDA_network_MISH(bands, CLASSES_NUM)
+    model = PPLiteRgbCatSpectral(num_classes=3, input_channel=3, spectral_input_channels=input_bands_nums,
+                                 cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs)
 
     # 4) 封装之前要把模型移到对应的gpu
     # model.to(device)
     # 引入SyncBN，这句代码，会将普通BN替换成SyncBN。只用这一句代码就可以解决BN层问题
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
-    criterion = nn.CrossEntropyLoss().to(device)
+    # criterion = nn.CrossEntropyLoss().to(device)
+    criterion = OhemCrossEntropy(ignore_label=0,
+                                 thres=OhemCrossEntropy_thres,
+                                 min_kept=min_kept,
+                                 weight=None,
+                                 model_num_outputs=3,
+                                 loss_balance_weights=[1, 1, 1])
+
+    # optim.lr_scheduler.ReduceLROnPlateau
+    scaler = GradScaler()
 
 
     ckpt_path = None
+    # model.train()
     # DDP: Load模型要在构造DDP模型之前，且只需要在master上加载就行了。
     if dist.get_rank() == 0 and ckpt_path is not None:
         dist.barrier()
@@ -185,39 +196,54 @@ if __name__ == '__main__':
     # model.load_state_dict(torch.load("/home/cjl/ywj_code/code/BS-NETs/bs_model/49.pkl"))
     # criterion=nn.MSELoss()
     ## DDP: 要在构造DDP model之后，才能用model初始化optimizer。
-    optimizer = torch.optim.Adam(model.parameters(), lr=mLearningRate, amsgrad=False)
-    lr_adjust = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 15, eta_min=0.0, last_epoch=-1)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=mLearningRate, amsgrad=False)
+    # lr_adjust = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 15, eta_min=0.0, last_epoch=-1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=mLearningRate)
+    # optimizer = torch.optim.AdamW(model.parameters(),lr=mLearningRate)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.8, last_epoch=-1)
+    lr_adjust = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.8, patience=12,
+                                                           verbose=True, threshold=0.005, threshold_mode='rel',
+                                                           cooldown=0,
+                                                           min_lr=0, eps=1e-08)
     t_start = time.time()
+    mean = torch.tensor([0.5, 0.5, 0.5]).to(device)
+    std = torch.tensor([0.5, 0.5, 0.5]).to(device)
     for epoch in range(300):
         model.train()
         trainLoader.sampler.set_epoch(epoch)
         trainLossTotal=0
         trainTotal = 0
         trainCorrect = 0
-        for data,label in trainLoader:
-            if torch.cuda.is_available():
-                imgdata = data.float().to(device)
-                label = label.long().to(device)
-            else:
-                imgdata = data
-                label = label.float()
-            # input_var
-            imgdata = imgdata.unsqueeze(1)
-            predict = model(imgdata)
-            # print('local_rank: ',local_rank,' batch size:',predict.size()[0])
-            # predict = predict.squeeze()
-            trainTotal += label.size(0)
-            predict = predict.squeeze()
-            predictIndex = torch.argmax(predict, dim=1)
-            labelIndex = torch.argmax(label, dim=1)
-            trainCorrect += (predictIndex == labelIndex).sum()
-            loss = criterion(predict, labelIndex)
-            #reduce_tensor(torch.tensor(train_acc).cuda(args.local_rank)
-            trainLossTotal += loss
-            # print("loss = %.5f" % float(loss))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        for i, data in enumerate(trainLoader, 0):
+            img, rgb_data, label = data  # label 需要改成 0，1，2，3，4 的形式 4表示其他
+            img, rgb_data, label = img.float().to(device), rgb_data.float().to(device), label.long().to(device)
+            img = img.permute(0, 3, 1, 2)
+            rgb_data = rgb_data / 255.0
+            rgb_data -= mean
+            rgb_data /= std
+            rgb_data = rgb_data.permute(0, 3, 1, 2)
+            # with autocast():
+            predict = model(rgb_data, img)  # B*CLASS_NUM*H*W
+            losses = criterion(predict, label)
+            torch.unsqueeze(losses, 0)
+            # print(losses.shape)
+            loss = losses.mean()
+            # print(loss.shape)
+            model.zero_grad()
+            scaler.scale(loss).backward()
+            trainLossTotal += loss.item()
+            scaler.step(optimizer)
+            scaler.update()
+            # predict=model(img)
+            predictIndex = torch.argmax(predict[0], dim=1)  # 计算一下准确率和召回率 B*H*W 和label1一样
+
+            trainCorrect += torch.sum((predictIndex == label) & (label != 0)).item()
+            trainTotal += torch.sum(label != 0).item()
+            del predict
+            del img
+            del rgb_data, label
+            torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
         train_acc = trainCorrect / trainTotal
         mean_loss = reduce_tensor(trainLossTotal).item()
         mean_acc = reduce_tensor(train_acc).item()
@@ -227,14 +253,10 @@ if __name__ == '__main__':
         if device != torch.device("cpu"):
             torch.cuda.synchronize(device)
         # dist.barrier()
-        lr_adjust.step()
+        lr_adjust.step(train_acc)
         if local_rank == 0:
             print('local_rank: ', local_rank,'learning rate = ', optimizer.state_dict()['param_groups'][0]['lr'])
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
+
         with torch.no_grad():
             model.eval()
             # 1. 得到本进程的prediction
@@ -242,10 +264,18 @@ if __name__ == '__main__':
             labels = []
             test_total = 0
             test_correct = 0
-            for data, label in testLoader:
-                data, label = data.float().to(local_rank), label.float().to(local_rank)
-                data = data.unsqueeze(1)
-                predictions.append(model(data))
+
+            for i, data in enumerate(testLoader, 0):
+                # img, rgb_data, label = data
+                img, rgb_data, label = img.float().to(local_rank), rgb_data.float().to(local_rank), label.long().to(local_rank)
+                img = img.permute(0, 3, 1, 2)
+                rgb_data = rgb_data / 255.0
+                rgb_data -= mean
+                rgb_data /= std
+                rgb_data = rgb_data.permute(0, 3, 1, 2)
+                # data, label = data.float().to(local_rank), label.float().to(local_rank)
+                # data = data.unsqueeze(1)
+                predictions.append(model(rgb_data, img)[0])
                 labels.append(label)
             # 进行gather 后面改成单点通信
             predictions = distributed_concat(torch.cat(predictions, dim=0),
@@ -255,24 +285,25 @@ if __name__ == '__main__':
             if local_rank == 0:
                 predictions = predictions.squeeze()
 
-                predictIndex = torch.argmax(predictions, dim=1)
-                labelIndex = torch.argmax(labels, dim=1)
+                # predictIndex = torch.argmax(predictions, dim=1)
+                # labelIndex = torch.argmax(labels, dim=1)
 
-                test_total += labelIndex.size(0)
-                test_correct += (predictIndex == labelIndex).sum()
+                predictIndex = torch.argmax(predictions, dim=1)  # 计算一下准确率和召回率 B*H*W 和label1一样
+                test_correct += torch.sum((predictIndex == labels) & (labels != 0)).item()
+                test_total += torch.sum(labels != 0).item()
                 test_acc = test_correct/test_total
 
                 print('local_rank: ', local_rank, 'test epoch: ', epoch,
                   ' acc:', test_acc.item())
-                predictIndex = predictIndex.cpu().detach().numpy().flatten()
-                labelIndex = labelIndex.cpu().detach().numpy().flatten()
-                target_names = ['other', 'skin', 'cloth', 'plant']
-                res = classification_report(labelIndex, predictIndex, target_names=target_names,
-                                            output_dict=True)
-                for k in target_names:
-                    # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
-                    print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
-                print('all test accuracy:', res['accuracy'], 'all test macro avg f1', res['macro avg']['f1-score'])
+                # predictIndex = predictIndex.cpu().detach().numpy().flatten()
+                # labelIndex = labelIndex.cpu().detach().numpy().flatten()
+                # target_names = ['other', 'skin', 'cloth', 'plant']
+                # res = classification_report(labelIndex, predictIndex, target_names=target_names,
+                #                             output_dict=True)
+                # for k in target_names:
+                #     # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
+                #     print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
+                # print('all test accuracy:', res['accuracy'], 'all test macro avg f1', res['macro avg']['f1-score'])
 
             # 3. 现在我们已经拿到所有数据的predictioin结果，进行evaluate！
             # my_evaluate_func(predictions, labels)

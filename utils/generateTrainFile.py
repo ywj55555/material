@@ -18,7 +18,7 @@ for i in range(len(filelist)):
 trainf.close()
 '''
 
-tainpath = r'D:/dataset/lgimg/test/'
+tainpath = r'D:\ZY2006224YWJ\material-extraction\needMarkHeFei\needtrain'
 trainFile = os.listdir(tainpath)
 # test_list = random.sample(trainFile,int(len(trainFile)*0.2))
 
@@ -29,12 +29,12 @@ trainf = open(train_file,'w')
 # testf = open(test_file,'w')
 
 for file in trainFile:
-    if file[-4:] != '.img':
+    if file[-4:] != '.png':
         continue
     # if file in test_list:
     #     testf.write('\''+file[:-4]+'\','+'\n')
     # else:
-    trainf.write('\'' + 'rgb' + file[:-4] + '\',' + '\n')
+    trainf.write('\'' + file[:-4] + '\',' + '\n')
 
 # os.close(trainf)
 # os.close(testf)

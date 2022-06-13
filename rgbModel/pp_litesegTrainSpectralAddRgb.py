@@ -34,7 +34,13 @@ mDevice=torch.device("cuda")
 waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
-select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 92]  # 模型选择结果波段
+hf_img = '/home/cjl/ssd/dataset/hefei/img/'
+hf_png = '/home/cjl/ssd/dataset/hefei/needtrain/'
+hf_label = '/home/cjl/ssd/dataset/hefei/label/'
+hz_label = '/home/cjl/ssd/dataset/hangzhou/label/'
+hz_png_path = '/home/cjl/ssd/dataset/hangzhou/rgb/'
+hz_img = '/home/cjl/ssd/dataset/hangzhou/'
+select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 93, 88]  # 模型选择结果波段
 
 # select_train_bands = [2,36,54,61,77,82,87,91,95,104,108]  # 手动选取波段
 # select_train_bands = [x + 5 for x in select_train_bands]
@@ -48,7 +54,7 @@ class_num = 2
 min_kept = args.min_kept
 OhemCrossEntropy_thres = 0.9
 band_sum = np.sum(np.array(select_train_bands))
-model_path = './PPLiteRgbCatSpectral_AddHZ_' + str(min_kept) + '_' + str(mLearningRate) + '_' + \
+model_path = './PPLiteRgbCatSpectral_Hf_' + str(min_kept) + '_' + str(mLearningRate) + '_' + \
              str(mtrainBatchSize) + '_' + str(band_sum) + '/'
 # model_path = './PPLiteSeg_Spectral_hand_Select_Band' + str(min_kept) + '_' + str(mLearningRate) + '_' + \
 #              str(mtrainBatchSize) + '_' + str(band_sum) + '/'
@@ -62,7 +68,7 @@ print('min_kept', min_kept)
 print('nora',nora)
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
-
+num_classes = 2
 def adjust_learning_rate(optimizer, base_lr, max_iters,
         cur_iters, power=0.9, nbb_mult=10):
     lr = base_lr*((1-float(cur_iters)/max_iters)**(power))
@@ -85,13 +91,13 @@ if __name__ == '__main__':
     torch.backends.cudnn.enabled = True
     mkdir(model_path)
     trainFile = SeaFile + HangZhouTrain
-    trainDataset = DatasetSpectralAndRgb(trainFile, waterImgRootPath, waterLabelPath, png_path, select_train_bands, nora, featureTrans)
-    testDataset = DatasetSpectralAndRgb(HangZhouTest, waterImgRootPath, waterLabelPath, png_path, select_train_bands, nora, featureTrans)
-    trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True)
-    testLoader = DataLoader(dataset=testDataset, batch_size=mtrainBatchSize, shuffle=True)
+    trainDataset = DatasetSpectralAndRgb(HfTrain, hf_img, hf_label, hf_png, select_train_bands, nora, featureTrans)
+    testDataset = DatasetSpectralAndRgb(waterFileHZ, hz_img, hz_label, hz_png_path, select_train_bands, nora, featureTrans)
+    trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
+    testLoader = DataLoader(dataset=testDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
 
     # model = PPLiteSeg(num_classes=3, input_channel=3, cm_bin_sizes=cm_bin_sizes).cuda() # PPLiteAddSpectralSeg
-    model = PPLiteRgbCatSpectral(num_classes=3, input_channel=3, spectral_input_channels=input_bands_nums,
+    model = PPLiteRgbCatSpectral(num_classes=num_classes, input_channel=3, spectral_input_channels=input_bands_nums,
                                  cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs).cuda()
     # model = PPLiteSeg(num_classes=3, input_channel=input_bands_nums).cuda()
     # model = MaterialSubModel(in_channels=input_bands_nums, out_channels=class_num).cuda()
@@ -99,7 +105,7 @@ if __name__ == '__main__':
     # criterion=nn.MSELoss()
     # criterion = nn.SmoothL1Loss()
     # criterion = nn.CrossEntropyLoss()
-    criterion = OhemCrossEntropy(ignore_label=0,
+    criterion = OhemCrossEntropy(ignore_label=-1,
                                  thres=OhemCrossEntropy_thres,
                                  min_kept=min_kept,
                                  weight=None,
@@ -147,8 +153,10 @@ if __name__ == '__main__':
             # label1[label1 == class_num] = 0  # 0表示其他类别位置
             # label1 = label1.long()
             # tlabel = label1.clone()
-            count_right += torch.sum((predictIndex == label) & (label != 0)).item()
-            count_tot += torch.sum(label != 0).item()
+            # count_right += torch.sum((predictIndex == label) & (label != 0)).item()
+            # count_tot += torch.sum(label != 0).item()
+            count_right += torch.sum(predictIndex == label).item()
+            count_tot += torch.sum(label != -1).item()
             del predict
             del img
             del rgb_data, label
@@ -187,6 +195,7 @@ if __name__ == '__main__':
             img, rgb_data, label = data
             img, rgb_data, label = Variable(img).float().cuda(), Variable(rgb_data).float().cuda(), Variable(
                 label).long().cuda()
+            label[label == 2] = 0  # 后续只标注0类别
             img = img.permute(0, 3, 1, 2)
             rgb_data = rgb_data / 255.0
             rgb_data -= mean
@@ -201,8 +210,10 @@ if __name__ == '__main__':
                 scaler.step(optimizer)
                 scaler.update()
                 predictIndex = torch.argmax(predict[0], dim=1)  # 计算一下准确率和召回率 B*H*W 和label1一样
-                count_right += torch.sum((predictIndex == label) & (label != 0)).item()
-                count_tot += torch.sum(label != 0).item()
+                # count_right += torch.sum((predictIndex == label) & (label != 0)).item()
+                # count_tot += torch.sum(label != 0).item()
+                count_right += torch.sum(predictIndex == label).item()
+                count_tot += torch.sum(label != -1).item()
                 del predict
                 del img
                 del rgb_data, label
