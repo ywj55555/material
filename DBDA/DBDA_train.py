@@ -1,4 +1,5 @@
 import sys
+sys.path.append('../')
 from model_block.materialNet import *
 from model_block import network
 import torch
@@ -9,6 +10,7 @@ import random
 from utils.parse_args import parse_args
 from torch.autograd import Variable
 from model_block.DBDA_Conv import DBDA_network_MISH_full_conv
+from sklearn import preprocessing
 # from sklearn.metrics import classification_report
 # os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 # CUDA:0
@@ -34,9 +36,10 @@ print('mEpochs',mEpochs)
 print('mLearningRate',mLearningRate)
 print('model_select',model_select)
 print('nora',nora)
+model_select = 2
 # model_path = ['./IntervalSampleWaterModel/','./newSampleWaterModel/','./IntervalSampleBigWaterModel/']
-model_kind = ["DBDA_full_conn", "DBDA_full_conv"]
-model_save = "./" + model_kind[model_select - 1] + "_" + str(mBatchSize) + "_" + str(mLearningRate) + "_"+ str(featureTrans) + "/"
+model_kind = ["DBDA_full_conn", "SSRN_full_coon"]
+model_save = "./model/" + model_kind[model_select - 1] + "_" + str(mBatchSize) + "_" + str(mLearningRate) + "_"+ str(featureTrans) + "/"
 select_bands = [2,36,54,61,77,82,87,91,95,104,108]
 select_bands = [x + 5 for x in  select_bands]
 
@@ -44,13 +47,13 @@ select_bands = [x + 5 for x in  select_bands]
 # 换成小模型 11 通道 重新验证一下？？
 # select_bands = [x for x in range(128)]
 mkdir(model_save)
-class_nums = 2
+class_nums = 4
 
 if featureTrans:
     bands_num = 21
 else:
     bands_num = len(select_bands)
-
+bands_num = 12
 if bands_num != 128:
     bands_str = [str(x) for x in select_bands]
     bands_str = "_".join(bands_str)
@@ -71,10 +74,10 @@ if __name__ == '__main__':
     torch.backends.cudnn.deterministic = True
     # 使用非确定性算法
     torch.backends.cudnn.enabled = True
-
-    save_trainData_npy_path = './trainData/' + "big_32_0.001_False" + 'mulprocess.npy'
-    # save_trainData_npy_path = './trainData/big_32_0.001_Falsemulprocess1.npy'
-    print(save_trainData_npy_path)
+    #
+    # save_trainData_npy_path = './trainData/' + "big_32_0.001_False" + 'mulprocess.npy'
+    # # save_trainData_npy_path = './trainData/big_32_0.001_Falsemulprocess1.npy'
+    # print(save_trainData_npy_path)
     # multiProcessGenerateData(dataType, num, length, nora=True, class_nums=2, intervalSelect=True, featureTrans=True)
     # trainData, trainLabel = multiProcessGenerateData(dataType, 2500, 11, nora=nora, class_nums=class_nums,
     #                                      intervalSelect=True, featureTrans=featureTrans)
@@ -85,32 +88,52 @@ if __name__ == '__main__':
     #     print("error")
     #     sys.exit()
     # sys.exit()
-    if not os.path.exists(save_trainData_npy_path):
-        # 数据的归一化 应该在分割完patch之后 避免以后需要不归一化的数据
-        trainData, trainLabel = multiProcessGenerateData(dataType, 2000, 11, select_bands, nora=nora,
-                                                         class_nums=class_nums,
-                                                         intervalSelect=True, featureTrans=featureTrans)
-        # trainData, trainLabel = generateData("dataType", 2500, 11, DATA_TYPE, nora=nora, class_nums=class_nums, intervalSelect = True, featureTrans = featureTrans)
-        # trainData, trainLabel = generateData(dataType, 1000, 11, DATA_TYPE,nora=nora, class_nums = class_nums)
+    # if not os.path.exists(save_trainData_npy_path):
+    #     # 数据的归一化 应该在分割完patch之后 避免以后需要不归一化的数据
+    #     trainData, trainLabel = multiProcessGenerateData(dataType, 2000, 11, select_bands, nora=nora,
+    #                                                      class_nums=class_nums,
+    #                                                      intervalSelect=True, featureTrans=featureTrans)
+    #     # trainData, trainLabel = generateData("dataType", 2500, 11, DATA_TYPE, nora=nora, class_nums=class_nums, intervalSelect = True, featureTrans = featureTrans)
+    #     # trainData, trainLabel = generateData(dataType, 1000, 11, DATA_TYPE,nora=nora, class_nums = class_nums)
+    #
+    #     # testData, testLabel = generateData(dataType, 600, 11, DATA_TYPE,nora=nora, class_nums=class_nums)
+    #     # trainData = np.load('./trainData/train.npy')
+    #     # trainLabel = np.load('./trainData/trainLabel.npy')
+    #     # trainData = np.load('./trainData/trainIntervalAddFeature_1.npy')
+    #     # trainLabel = np.load('./trainData/trainLabelIntervalAddFeature_1.npy')
+    #     if not os.path.exists(save_trainData_npy_path):
+    #         try:
+    #             np.save(save_trainData_npy_path, trainData)
+    #             np.save(save_trainData_npy_path[:-4] + '_label.npy', trainLabel)
+    #             # np.save('./testData/testData.npy',testData)
+    #             # np.save('./testData/testLabel.npy',testLabel)
+    #         except:
+    #             print("error")
+    #             sys.exit()
+    # else:
+    #     trainData = np.load(save_trainData_npy_path)
+    #     trainLabel = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    #     print("train data exist!!!")
+    save_trainData_npy_path = '../trainData/AddWaterClassRiverSkinDetection1_22_38_57_68_77_86_90_100_105_112_115_123True_False.npy'
+    trainData1 = np.load(save_trainData_npy_path)
+    trainLabel1 = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    save_trainData_npy_path = '../trainData/AddWaterClassRiverSkinDetection2_22_38_57_68_77_86_90_100_105_112_115_123True_False.npy'
+    trainData2 = np.load(save_trainData_npy_path)
+    trainLabel2 = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    save_trainData_npy_path = '../trainData/AddWaterClassRiverSkinDetection3_22_38_57_68_77_86_90_100_105_112_115_123True_False.npy'
+    trainData3 = np.load(save_trainData_npy_path)
+    trainLabel3 = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    trainData = np.concatenate([trainData1, trainData2, trainData3], axis=0)
+    trainLabel = np.concatenate([trainLabel1, trainLabel2, trainLabel3], axis=0)
 
-        # testData, testLabel = generateData(dataType, 600, 11, DATA_TYPE,nora=nora, class_nums=class_nums)
-        # trainData = np.load('./trainData/train.npy')
-        # trainLabel = np.load('./trainData/trainLabel.npy')
-        # trainData = np.load('./trainData/trainIntervalAddFeature_1.npy')
-        # trainLabel = np.load('./trainData/trainLabelIntervalAddFeature_1.npy')
-        if not os.path.exists(save_trainData_npy_path):
-            try:
-                np.save(save_trainData_npy_path, trainData)
-                np.save(save_trainData_npy_path[:-4] + '_label.npy', trainLabel)
-                # np.save('./testData/testData.npy',testData)
-                # np.save('./testData/testLabel.npy',testLabel)
-            except:
-                print("error")
-                sys.exit()
-    else:
-        trainData = np.load(save_trainData_npy_path)
-        trainLabel = np.load(save_trainData_npy_path[:-4] + '_label.npy')
-        print("train data exist!!!")
+    trainData = trainData.transpose(0, 2, 3, 1)  # BHW C
+    #
+    trainData_ = trainData.reshape(np.prod(trainData.shape[:3]), np.prod(trainData.shape[3:]))
+    # trainData = trainData.reshape(trainData.shape[0]*trainData.shape[1],trainData.shape[2]*trainData.shape[3])
+    scaler = preprocessing.StandardScaler()
+    trainData_ = scaler.fit_transform(trainData_)
+    trainData = trainData_.reshape(trainData.shape)  # BHW C
+    trainData = trainData.transpose(0, 3, 1, 2)  # B C H W
     print("begin!!!")
     print("trainData shape : ", trainData.shape)
     print("trainLabel shape : ", trainLabel.shape)
@@ -135,6 +158,8 @@ if __name__ == '__main__':
     # model = ori_DBDA_network_MISH(bands,4,8).to(device)
     if model_select == 1:
         model = network.DBDA_network_MISH(bands_num, class_nums).to(device)
+    elif model_select == 2:
+        model = network.SSRN_network(bands_num, class_nums).to(device)
     else:
         model = DBDA_network_MISH_full_conv(bands_num, class_nums, 4).to(device)
     print("model name : ",model.name)
@@ -179,7 +204,7 @@ if __name__ == '__main__':
             # img = Variable(img).float().cuda()
             # img, label = Variable(img).float().to(device,non_blocking=True), Variable(label).long().to(device,non_blocking=True)
             img, label = Variable(img).float().to(device), Variable(label).long().to(device)
-
+            # img = img / torch.max(img, dim=1, keepdim=True)[0]
             img = img.permute(0,2,3,1)
             img = img.unsqueeze(1)#增加通道维度
 

@@ -1,5 +1,7 @@
 import os
-# from data.dictNew import *
+import sys
+sys.path.append('../')
+from data.dictNew import *
 import random
 
 # all_list = trainFile
@@ -18,18 +20,19 @@ for i in range(len(filelist)):
 trainf.close()
 '''
 
-tainpath = r'D:\ZY2006224YWJ\material-extraction\needMarkHeFei\needtrain'
+tainpath = r'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
 trainFile = os.listdir(tainpath)
 # test_list = random.sample(trainFile,int(len(trainFile)*0.2))
 
-train_file = './water_test_file.txt'
+train_file = './all_test_file.txt'
 # test_file = './test_file.txt'
 
 trainf = open(train_file,'w')
 # testf = open(test_file,'w')
+trainfile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
 
 for file in trainFile:
-    if file[-4:] != '.png':
+    if file[-4:] != '.png' or file[-4:] in trainfile:
         continue
     # if file in test_list:
     #     testf.write('\''+file[:-4]+'\','+'\n')

@@ -77,11 +77,11 @@ def val_label(png_path, label_path, save_path, label_nums=2):
 if __name__ == '__main__':
     # pass
     # rgb_list = get_random_rgb(4)
-    png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
-    waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
-    save_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1_rend/'
+    png_path = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+    waterLabelPath = 'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
+    save_path = 'D:/ZY2006224YWJ/spectraldata/RiverSkinDetection_rend/'
     mkdir(save_path)
-    val_label(png_path, waterLabelPath, save_path, 2)
+    val_label(png_path, waterLabelPath, save_path, 3)
     # png_path = r'D:\ZY2006224YWJ\material-extraction\needMark' + '\\'
     # label_path = r'D:\ZY2006224YWJ\material-extraction\needMark\backup\finalLabel' + '\\'
     # test_batch = 4

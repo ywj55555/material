@@ -1,6 +1,7 @@
 import gc
 import random
 
+import cv2
 from skimage import io
 import math
 from multiprocessing import Process,Pool
@@ -16,7 +17,9 @@ import copy
 
 code2label = [0,2,2,2,0,2,2,2,1,0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0] #1:skin 2:cloth 3:plant 0:other
 # label2class = [255,1,2,0]
-label2class = [255,1,0]
+# label2class = [0,1,2]
+from waterAndSkinModel import class_nums
+label2class = range(class_nums)
 label2target = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
 SKIN_TYPE = 0
@@ -44,16 +47,17 @@ waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 waterImgRootPathList = ['vedio1','vedio2','vedio3','vedio4','vedio5','vedio6','vedio7']
+skinAndWaterLabelPath = 'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
 # label_data_dir_6se = '/home/cjl/data/sensor6/label/'
 # tif_dir = '/home/cjl/data/sensor6/tif_data/'
 #env_data_dir = 'E:/BUAA_Spetral_Data/hangzhou/envi/'
 #label_data_dir = 'E:/BUAA_Spetral_Data/hangzhou/label/'
 
 # 每一类 取样最小间隔
-min_interval = [4,10]
+min_interval = [0 for _ in range(class_nums)]
 # 记录每张图 每一个类 取样了多少patch
-class_nums_record = {1:0,2:0}
-
+# class_nums_record = {0:0, 1:0,2:0}
+class_nums_record = {x : 0 for x in range(class_nums)}
 # output_log = open('./log/output_generate.log','w')
 
 # def generateData(dataType, num, length, selectMode=SELECT_RANDOM,nora = True,allband=True,feature=False,class_num=10,cut_num=10,per_class_num=None):
@@ -177,10 +181,12 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
     if dataType == 'sea':
         labelpath = waterLabelPath
         imgpath = waterImgRootPath
-
+    elif dataType =='RiverSkinDetection1':
+        labelpath = skinAndWaterLabelPath
+        imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
     else:
-        labelpath = waterLabelPath
-        imgpath = waterImgRootPath
+        labelpath = skinAndWaterLabelPath
+        imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
     dataFile_LEN = len(dataFile)
     for file_order,file in enumerate(dataFile):
         print(file)
@@ -192,18 +198,13 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
         # imgData = envi_loader(os.path.join(env_data_dir,file[:8])+'/', file,nora)
         # 读取img文件
         imgData = None
-        if os.path.exists(imgpath + file[3:] + '.img'):
-            imgData = envi_loader(imgpath, file[3:], bands, False)
+        if os.path.exists(imgpath + file + '.img'):
+            imgData = envi_loader(imgpath, file, bands, False)
         else:
-            for tmpImgPath in waterImgRootPathList:
-                if os.path.exists(imgpath + tmpImgPath + '/' + file[3:] + '.img') :
-                    imgData = envi_loader(imgpath + tmpImgPath + '/', file[3:], bands,False)
-                    break
+            print(file, 'not found!!!')
+            continue
         # t3 = time.time()
         # 没必要 特征变换 增加之前设计的斜率特征
-        if imgData is None:
-            print("Not Found ",file)
-            continue
         # H W 22
         if featureTrans:
             print("kindsOfFeatureTransformation......")
@@ -231,20 +232,72 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
     print("当前进程id: ", id , "done!!!!!!")
     return Data, Label
 
-def multiProcessGenerateData(dataType, num, length, bands, activate, nora = True, class_nums = 2, intervalSelect = True, featureTrans = True):
+def singleProcessGenerateRgbData(dataFile, num, rgbpath, labelpath, length, class_nums = 2, intervalSelect = True):
+    id = os.getpid()
+    print("当前进程id: ", id, "begin!!!!!!")
+    Data = []
+    Label = []
+    # if dataType == 'sea':
+    #     labelpath = waterLabelPath
+    #     rgbpath = waterImgRootPath
+    # elif dataType =='RiverSkinDetection1':
+    #     labelpath = skinAndWaterLabelPath
+    #     # rgbpath = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+    # else:
+    #     labelpath = skinAndWaterLabelPath
+        # rgbpath = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+    dataFile_LEN = len(dataFile)
+    for file_order,file in enumerate(dataFile):
+        print(file)
+        print(file_order, "/" ,dataFile_LEN)
+        # output_log.writelines(str(file_order)+ "/" + str(dataFile_LEN))
+        # 1 skin 2 cloth 3 other
+        imgLabel = io.imread(labelpath + file + '.png')
+        # t2 = time.time()
+        # imgData = envi_loader(os.path.join(env_data_dir,file[:8])+'/', file,nora)
+        # 读取img文件
+        imgData = cv2.imread(rgbpath + file + '.png')
+        imgData = imgData[:, :, ::-1]
+        # t3 = time.time()
+        # 没必要 特征变换 增加之前设计的斜率特征
+        # H W 22
+        # 11*11像素块 类别预测 作为中心像素类别 可以利用上下文信息 提升准确率
+        # 分割出像素块 返回像素块和对应的类别
+        if intervalSelect:
+            print("intervalGenerateAroundDeltaPatchAllLen...")
+            pix, label = intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, file, 50, class_nums)
+        else:
+            print("random sampling...")
+            pix, label = generateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, class_nums)
+        Data.extend(pix)
+        Label.extend(label)
+        del imgData
+        gc.collect()
+    # id = os.getpid()
+    print("当前进程id: ", id , "done!!!!!!")
+    return Data, Label
+
+def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, activate='sig', nora = True, class_nums = 2,
+                             intervalSelect = True, featureTrans = True, rgbData = False,labelpath = None, imgpath = None):
     all_process_data = []
     all_process_label = []
     if dataType == 'sea':
         dataFile = SeaFile
-        labelpath = waterLabelPath
-        imgpath = waterImgRootPath
+    elif dataType == 'RiverSkinDetection1':
+        dataFile = RiverSkinDetection1
+    elif dataType == 'RiverSkinDetection2':
+        dataFile = RiverSkinDetection2
+    elif dataType == 'RiverSkinDetection3':
+        dataFile = RiverSkinDetection3
+    elif dataType == 'RiverSkinDetectionAll':
+        dataFile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
     else:
-        dataFile = waterFileTest
-        labelpath = waterLabelPath
-        imgpath = waterImgRootPath
+        dataFile = RiverSkinDetectionTest
     # 启动多个进程 分发文件列表
     print(mp.cpu_count())
     process_nums = os.cpu_count()
+    if process_nums > len(dataFile):
+        process_nums = len(dataFile)
     id = os.getpid()
     # 获取当前进程id
     print("当前主进程id: ", id)
@@ -263,8 +316,15 @@ def multiProcessGenerateData(dataType, num, length, bands, activate, nora = True
         right = (i + 1) * perProcess if (i + 1) * perProcess < all_file_nums else all_file_nums
         # args : (dataType, dataFile, num, length, nora = True, class_nums = 2, intervalSelect = True, featureTrans = True)
         # 同步运行,阻塞、直到本次任务执行完毕拿到 single_res
-
-        single_res = process_poll.apply_async(singleProcessGenerateData, args=(dataType, dataFile[left:right], num, length, bands, activate, nora, class_nums, intervalSelect, featureTrans))
+        if rgbData: # (dataFile, num, rgbpath, labelpath, length, class_nums = 2, intervalSelect = True)
+            single_res = process_poll.apply_async(singleProcessGenerateRgbData, args=(
+                dataFile[left:right], num, imgpath, labelpath, length,class_nums, intervalSelect,
+                ))
+        else:
+            single_res = process_poll.apply_async(singleProcessGenerateData, args=(
+            dataType, dataFile[left:right], num, length, bands, activate, nora, class_nums, intervalSelect,
+            featureTrans))
+        # single_res = process_poll.apply_async(generateFun, args=(dataType, dataFile[left:right], num, length, bands, activate, nora, class_nums, intervalSelect, featureTrans))
         seg_data_all_process.append(single_res)  # 将调用apply_async方法，得到返回进程内存地址结果
     process_poll.close()
     process_poll.join()
@@ -383,7 +443,7 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
     labels = np.empty([0, class_nums])
     # 去掉过曝区域
 
-    for label in range(1,class_nums + 1):  #label 已经转为0，1，2，3，4了 ,3植物 2衣物 1皮肤 4其他，0无标签
+    for label in range(0, class_nums):  #label 已经转为0，1，2，3，4了 ,3植物 2衣物 1皮肤 4其他，0无标签
         # cnt = 1
         label_index = np.where(imgLabel[length1:-length1,length1:-length1] == label)  # 找到标签值等于label的下标点 size：2*个数
         pixels_nums = len(label_index[0])
@@ -404,7 +464,7 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
                 边界部分本来就难识别，多取样也并非坏事
         '''
         #最小采样间隔
-        interval =  min_interval[label-1]
+        interval =  min_interval[label]
         #间隔1采样，数量除以4
         if pixels_nums > interval*interval*labelCount:
             mul = math.sqrt(pixels_nums/labelCount)
@@ -424,7 +484,7 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
             mask += [mk for mk in range(i*interval,interval*(i+1)-1 if interval*(i+1)-1<imgLabel.shape[0] else imgLabel.shape[0])]
             # imgLabel_tmp[i*cnt:cnt*(i+1)-1,:]=0
         # print('mask',mask)
-        imgLabel_tmp[mask,:] = 0
+        imgLabel_tmp[mask,:] = 255
         new_label_index = np.where(imgLabel_tmp == label)
         print('after row sampling: ',len(new_label_index[0]))
         # print(imgLabel_tmp)
@@ -436,7 +496,7 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
         # print('cnt: ', cnt)
         for i in range(cnt):
             mask += [mk for mk in range(i*interval,interval*(i+1)-1 if interval*(i+1)-1<imgLabel.shape[1] else imgLabel.shape[1])]
-        imgLabel_tmp[:,mask] = 0
+        imgLabel_tmp[:,mask] = 255
         # print('mask', mask)
         #取样后的索引
         new_label_index = np.where(imgLabel_tmp[length1:-length1,length1:-length1] == label)
@@ -467,7 +527,10 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
             labels = np.append(labels, np.reshape(tmp, [-1, class_nums]), axis=0)
             x = new_label_index[0][index]
             y = new_label_index[1][index]
-            pixAround = img[:,:,x : x + 2*length1 + 1, y : y + 2*length1 + 1]  # 21,21,bands
+            if length % 2 == 0:
+                pixAround = img[:,:,x : x + 2*length1, y : y + 2*length1]  # 21,21,bands
+            else:
+                pixAround = img[:, :, x: x + 2 * length1 + 1, y: y + 2 * length1 + 1]  # 21,21,bands
             pix = np.append(pix, pixAround, axis=0)
             # np.save(save_path + filename + name_list[label - 1] + str(index).rjust(4, '0') + '.npy', pixAround)
     labels = np.array(labels).astype('int64')

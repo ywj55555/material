@@ -9,13 +9,18 @@ def returnint():
     print("hanshu : ",id(a))
     return a
 if __name__ == '__main__':
-    label_path = '/home/cjl/ssd/dataset/hangzhou/label/'
-    img_path = '/home/cjl/ssd/dataset/hangzhou/'
-    labellist = os.listdir(label_path)
-    for label in labellist:
-        # print(img_path + label[3:] + '.img')
-        if not os.path.exists(img_path + label[3:-4] + '.img'):
-            print(label)
+    # label_path = '/home/cjl/ssd/dataset/hangzhou/label/'
+    # img_path = '/home/cjl/ssd/dataset/hangzhou/'
+    # labellist = os.listdir(label_path)
+    # for label in labellist:
+    #     # print(img_path + label[3:] + '.img')
+    #     if not os.path.exists(img_path + label[3:-4] + '.img'):
+    #         print(label)
+    # a = {x : 0 for x in range(4)}
+    # print(a)
+    a = np.random.randint(1,5,(4,5))
+    b = a.reshape(2,4)
+    print(b)
     # path1 = './trainData/big_32_0.001_Falsemulprocess_label.npy'
     # # path2 = './trainData/big_32_0.001_False.npy'
     # npy1 = np.load(path1)

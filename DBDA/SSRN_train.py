@@ -8,6 +8,7 @@ import random
 from utils.parse_args import parse_args
 # os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 # CUDA:0
+from sklearn import preprocessing
 
 args = parse_args()
 #lr, num_epochs, batch_size = 0.001, 200, 32
@@ -53,12 +54,35 @@ if __name__ == '__main__':
     # n_sam = len(train_list)
     # n_sam2 =len(test_list)
     # bt3 = time.time()
-    trainData, trainLabel = generateData('train', 300, 11, DATA_TYPE)
-    testData, testLabel = generateData('test', 300, 11, DATA_TYPE)
+    # trainData, trainLabel = generateData('train', 300, 11, DATA_TYPE)
+    # testData, testLabel = generateData('test', 300, 11, DATA_TYPE)
     # train_list, train_label = read_list(train_path)
     # test_list, test_label = read_list(test_path)
     # trainDataset = Dataset_patch_mem(train_list, train_label)
     # testDataset = Dataset_patch_mem(test_list, test_label)
+    save_trainData_npy_path = '../trainData/AddWaterClassRiverSkinDetection1_22_38_57_68_77_86_90_100_105_112_115_123True_False.npy'
+    trainData1 = np.load(save_trainData_npy_path)
+    trainLabel1 = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    save_trainData_npy_path = '../trainData/AddWaterClassRiverSkinDetection2_22_38_57_68_77_86_90_100_105_112_115_123True_False.npy'
+    trainData2 = np.load(save_trainData_npy_path)
+    trainLabel2 = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    save_trainData_npy_path = '../trainData/AddWaterClassRiverSkinDetection3_22_38_57_68_77_86_90_100_105_112_115_123True_False.npy'
+    trainData3 = np.load(save_trainData_npy_path)
+    trainLabel3 = np.load(save_trainData_npy_path[:-4] + '_label.npy')
+    trainData = np.concatenate([trainData1, trainData2, trainData3], axis=0)
+    trainLabel = np.concatenate([trainLabel1, trainLabel2, trainLabel3], axis=0)
+
+    trainData = trainData.transpose(0, 2, 3, 1)  # BHW C
+    #
+    trainData_ = trainData.reshape(np.prod(trainData.shape[:3]), np.prod(trainData.shape[3:]))
+    # trainData = trainData.reshape(trainData.shape[0]*trainData.shape[1],trainData.shape[2]*trainData.shape[3])
+    scaler = preprocessing.StandardScaler()
+    trainData_ = scaler.fit_transform(trainData_)
+    trainData = trainData_.reshape(trainData.shape)  # BHW C
+    trainData = trainData.transpose(0, 3, 1, 2)  # B C H W
+    print("begin!!!")
+    print("trainData shape : ", trainData.shape)
+    print("trainLabel shape : ", trainLabel.shape)
 
     trainDataset = MyDataset(trainData, trainLabel)
     testDataset = MyDataset(testData, testLabel)

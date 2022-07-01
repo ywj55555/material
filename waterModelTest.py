@@ -15,7 +15,7 @@ args = parse_test_args()
 FOR_TESTSET = args.FOR_TESTSET
 test_batch = args.test_batch
 print(FOR_TESTSET,test_batch)
-
+test_batch = 6
 file_str = {0:'_hz_train_',1:'_hz_test_',2:'_addsh_train_',3:'_addsh_test_'}
 log = './log/'
 mkdir(log)
@@ -24,25 +24,27 @@ env_data_dir = 'D:/ZF2121133HHX/20220407/vedio3/'
 waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 # waterImgRootPath = 'D:/ZF2121133HHX/water/daytime/'
 waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
+labelpath = 'D:/ZY2006224YWJ/spectraldata/trainLabel/'
+imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 # waterImgRootPathList = ['vedio1', 'vedio2', 'vedio3', 'vedio4', 'vedio5', 'vedio6', 'vedio7']
-waterImgRootPathList = ['train']#test
+# waterImgRootPathList = ['train']#test
 # select_bands = [2,36,54,61,77,82,87,91,95,104,108]
 # select_bands = [x + 5 for x in  select_bands]
-select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
+select_bands = [22, 38, 57, 68, 77, 86, 90, 100, 105, 112, 115, 123]
 # select_bands = [x for x in range(128)]
 # imgpath
-label_data_dir = '/home/cjl/dataset/label/'
-png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
+# label_data_dir = '/home/cjl/dataset/label/'
+png_path = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
 # png_path = 'E:/tmp/water/daytime/rgb/'
 
 # csv2_save_path = log+'class4_allFile500_acc.csv'
 # model_dict = {1:'ori_model_hz',2:'ori_model_hz'}
-class_nums = 2
+class_nums = 4
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = "./small_32_0.001_True_True_False_sig/"
+model_path = "./model/addWaterAndSkin3_64_0.001_True_False_False/"
 LEN = 5
 featureTrans = False
 if featureTrans:
@@ -51,7 +53,7 @@ else:
     inputBands = len(select_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [1,2,3,4,6,7,8,9,120,150,180,230,250,280,299]]
+epoch_list = [str(x) for x in [40, 50, 80, 150, 250]]
 # epoch_list = [str(x) for x in []]
 # epoch_list = [str(x) for x in [299]]
 
@@ -84,13 +86,14 @@ for epoch in epoch_list:
     predict_list = []
     count_right = 0
     count_tot = 0
-    result_dir = './resTrain/' + model_path[2:] + epoch + '/'
+    # result_dir = './resTrain/' + model_path[2:] + epoch + '/'
+    result_dir = './resTrain/RiverSkinDetectionLabel/' + epoch + '/'
     # result_dir_label = './res/'+ epoch + '/'
     # file_list = Shenzhen_test
     # file_list = waterFile
-    file_list = SeaFile
+    file_list = RiverSkinDetection3
 
-    file_list = [x[3:] for x in file_list]
+    # file_list = [x for x in file_list]
     print("the number of test file:",len(file_list))
     # if FOR_TESTSET == 0:
     #     file_list = trainFile_hz
@@ -113,26 +116,17 @@ for epoch in epoch_list:
         file_tmp = file_list[i*test_batch:(i+1)*test_batch if (i+1)<cnt else len(file_list)]
         imgData = []
         for filename in file_tmp:
-
             imgData_tmp = None
-            if os.path.exists(waterImgRootPath + filename + '.img'):
-                imgData_tmp = envi_loader(waterImgRootPath, filename, select_bands, False)
+            if os.path.exists(imgpath + filename + '.img'):
+                imgData_tmp = envi_loader(imgpath, filename, select_bands, False)
             else:
-                for tmpImgPath in waterImgRootPathList:
-                    if os.path.exists(waterImgRootPath + tmpImgPath + '/' + filename + '.img'):
-                        imgData_tmp = envi_loader(waterImgRootPath + tmpImgPath + '/', filename, select_bands, False)
-                        break
-            # t3 = time.time()
-            # 没必要 特征变换 增加之前设计的斜率特征
-
-            if imgData_tmp is None:
                 print("Not Found ", filename)
                 continue
-            if featureTrans:
-                imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
-            else:
-                print("normalizing......")
-                imgData_tmp = envi_normalize(imgData_tmp)
+            # if featureTrans:
+            #     imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
+            # else:
+            #     print("normalizing......")
+            #     imgData_tmp = envi_normalize(imgData_tmp)
             # imgData_tmp = envi_loader(env_data_dir, filename, True)
             # envi_loader(imgpath, file[3:], nora)
             # imgData_tmp = transform2(imgData_tmp)
@@ -167,6 +161,7 @@ for epoch in epoch_list:
                 print(info)
                 continue
             print(inputData.shape)
+            inputData = inputData / torch.max(inputData, dim=1, keepdim=True)[0]
             predict = model(inputData)
             del inputData
             torch.cuda.empty_cache()
@@ -183,22 +178,22 @@ for epoch in epoch_list:
         #     rows, cols = predict_ind.shape
             png_num = predict_ind.shape[0]
             for png_i in range(png_num):
-                png_path_single = png_path + "rgb" + file_tmp[png_i] + '.png'
+                png_path_single = png_path + file_tmp[png_i] + '.png'
                 print(png_path_single)
                 if not os.path.exists(png_path_single):
                     continue
-                imgGt = cv2.imread(png_path + "rgb" + file_tmp[png_i] + '.png')
+                imgGt = cv2.imread(png_path +  file_tmp[png_i] + '.png')
                 imgGt = imgGt[5:-5,5:-5]
 
                 imgRes = imgGt
-                for color_num in [1,2]:
+                for color_num in range(1,class_nums):
                     imgRes = mask_color_img(imgRes,mask=(predict_ind[png_i] == color_num),color=color_class[color_num-1],alpha=0.7 )
                 # imgRes = np.zeros((rows, cols, 3), np.uint8)
                 # imgRes[predict_ind == 1, 2] = 255
                 # imgRes[predict_ind == 2, 0] = 255
                 # imgRes[predict_ind == 3, 1] = 255
                 print(result_dir + file_tmp[png_i] + '.png')
-                cv2.imwrite(result_dir + file_tmp[png_i] + '.png', imgRes)
+                cv2.imwrite(result_dir + file_tmp[png_i] + '.png', predict_ind[png_i])
                 # cv2.imwrite(result_dir_label + file_tmp[png_i] + '.png', predict_ind[png_i])
 
                 # img_label = cv2.imread(label_data_dir + file_tmp[png_i] + '.png', cv2.IMREAD_GRAYSCALE)

@@ -229,4 +229,5 @@ res
 *.xml
 .idea
 *.npy
+model/
 rgbModel/resTrain

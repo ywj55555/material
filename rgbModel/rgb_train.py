@@ -18,6 +18,9 @@ from sklearn.metrics import classification_report
 from model_block.Dataset import MyDataset_ori
 from torch.utils.data import DataLoader
 from data.utilNetNew import *
+from data.dictNew import *
+from sklearn import preprocessing
+from torch.autograd import Variable
 args = parse_test_args()
 # mLearningRate = args.lr
 # mBatchSize = args.batchsize
@@ -29,11 +32,15 @@ mLearningRate=0.0001
 criterion=nn.MSELoss()
 model_dict = {0:'zw_cnn',1:'fc_cnn',2:'mac_cnn',3:'zw_cnn_leakyrelu',4:'cnn-s'}
 length_list = {0:11,1:32,2:16,3:11,4:32}
-model_path = './'+model_dict[model_select]+'_model_'+str(mBatchSize)+'_'+str(mLearningRate)+'/'
+model_path = './'+model_dict[model_select] + str(mBatchSize)+'_'+str(mLearningRate)+'/'
 # train_path = '/home/cjl/data/patch_sparse_cut_scale_9channel_data/_train_/'
 # test_path = '/home/cjl/data/patch_sparse_cut_scale_9channel_data/_test_/'
 device = torch.device('cuda')
 mDevice=torch.device("cuda")
+
+skinAndWaterLabelPath = 'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
+rgbpath = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+
 if __name__ == '__main__':
     bt = time.time()
     seed = 2021
@@ -56,46 +63,57 @@ if __name__ == '__main__':
     # n_sam2 =len(test_list)
     # bt3 = time.time()
     #先获取RGB-NIR
-    #返回 B C H W
-    trainData, trainLabel = generateRgbnirDNData('train', 300, length_list[model_select], DATA_TYPE)
-    trainData = trainData.transpose(0, 2, 3, 1)  # BHW C
+    #返回 B C H W (dataFile, num, rgbpath, labelpath, length, class_nums = 2, intervalSelect = True)
+
+
+    # testData, testLabel = generateRgbnirDNData('test', 300, length_list[model_select], DATA_TYPE)
     #
-    trainData_ = trainData.reshape(np.prod(trainData.shape[:3]), np.prod(trainData.shape[3:]))
-    # trainData = trainData.reshape(trainData.shape[0]*trainData.shape[1],trainData.shape[2]*trainData.shape[3])
-    scaler = preprocessing.StandardScaler()
-    trainData_ = scaler.fit_transform(trainData_)
-    trainData = trainData_.reshape(trainData.shape) # BHW C
-    trainData = trainData.transpose(0, 3,1, 2) #B C H W
-    #
-    print(scaler.mean_, scaler.var_)
+    # testData = testData.transpose(0, 2, 3, 1)  # BHW C
+    # testData_ = testData.reshape(np.prod(testData.shape[:3]), np.prod(testData.shape[3:]))
+    # testData_ = scaler.transform(testData_)
+    # testData = testData_.reshape(testData.shape)
+    # testData = testData.transpose(0,3,1,2)#B C H W
+    save_trainData_npy_path = './trainData/'
+    mkdir(save_trainData_npy_path)
+    save_trainData_npy_path = save_trainData_npy_path +  model_dict[model_select] + '.npy'
+    if not os.path.exists(save_trainData_npy_path):
+        # 数据的归一化 应该在分割完patch之后 避免以后需要不归一化的数据
+        allFILE = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
+        # (dataType, num, length, bands=None, activate='sig', nora = True, class_nums = 2,
+        #                              intervalSelect = True, featureTrans = True, rgbData = False,labelpath = None, imgpath = None)
+        # B C H W
+        trainData, trainLabel = multiProcessGenerateData(dataType='RiverSkinDetectionAll', num=3500, imgpath=rgbpath, labelpath=skinAndWaterLabelPath,
+                                                             length=length_list[model_select], class_nums=class_nums, intervalSelect=True, rgbData=True)
+        trainData = trainData.transpose(0, 2, 3, 1)  # BHW C
+        #
+        trainData_ = trainData.reshape(np.prod(trainData.shape[:3]), np.prod(trainData.shape[3:]))
+        # trainData = trainData.reshape(trainData.shape[0]*trainData.shape[1],trainData.shape[2]*trainData.shape[3])
+        scaler = preprocessing.StandardScaler()
+        trainData_ = scaler.fit_transform(trainData_)
+        trainData = trainData_.reshape(trainData.shape)  # BHW C
+        trainData = trainData.transpose(0, 3, 1, 2)  # B C H W
+        # 测试的时候记得减去mean ，除以 var
+        # [56.54884781 45.74997012 39.97695533] [3327.70049172 1916.7318851  1372.06279076]
+        print(scaler.mean_, scaler.var_)
 
-
-    testData, testLabel = generateRgbnirDNData('test', 300, length_list[model_select], DATA_TYPE)
-
-    testData = testData.transpose(0, 2, 3, 1)  # BHW C
-    testData_ = testData.reshape(np.prod(testData.shape[:3]), np.prod(testData.shape[3:]))
-    testData_ = scaler.transform(testData_)
-    testData = testData_.reshape(testData.shape)
-    testData = testData.transpose(0,3,1,2)#B C H W
-    if model_select==3:
-        try:
-            np.save('trainData.npy',trainData)
-            np.save('trainLabel.npy', trainLabel)
-            np.save('testData.npy',testData)
-            np.save('testLabel.npy',testLabel)
-        except:
-            pass
-
-
-    # train_list, train_label = read_list(train_path)
-    # test_list, test_label = read_list(test_path)
-    # trainDataset = Dataset_patch_mem(train_list, train_label)
-    # testDataset = Dataset_patch_mem(test_list, test_label)
+        if not os.path.exists(save_trainData_npy_path):
+            try:
+                np.save(save_trainData_npy_path,trainData)
+                np.save(save_trainData_npy_path[:-4] + '_label.npy', trainLabel)
+                # np.save('./testData/testData.npy',testData)
+                # np.save('./testData/testLabel.npy',testLabel)
+            except Exception as e:
+                print("error")
+                print(e)
+                sys.exit()
+    else:
+        trainData = np.load(save_trainData_npy_path)
+        trainLabel = np.load(save_trainData_npy_path[:-4] + '_label.npy')
 
     trainDataset = MyDataset_ori(trainData, trainLabel)
-    testDataset = MyDataset_ori(testData, testLabel)
+    # testDataset = MyDataset_ori(testData, testLabel)
     trainLoader = DataLoader(dataset=trainDataset, batch_size=mBatchSize, shuffle=True)
-    testLoader = DataLoader(dataset=testDataset, batch_size=mBatchSize, shuffle=True)
+    # testLoader = DataLoader(dataset=testDataset, batch_size=mBatchSize, shuffle=True)
 
     # trainLoader = DataLoader(dataset=trainDataset, batch_size=mBatchSize, shuffle=True,num_workers=multiprocessing.cpu_count(), pin_memory = True)
     # testLoader = DataLoader(dataset=testDataset, batch_size=mBatchSize, shuffle=True,num_workers=multiprocessing.cpu_count(), pin_memory = True)
@@ -106,9 +124,9 @@ if __name__ == '__main__':
     if model_select==0:
         model = MaterialModel().to(device)
     elif model_select==1:
-        model = FcCNN(4).to(device)
+        model = FcCNN(class_nums).to(device)
     elif model_select==2:
-        model = MAC_CNN(4).to(device)
+        model = MAC_CNN(class_nums).to(device)
     elif model_select==3:
         model = MaterialModel_leakrelu().to(device)
     else:
@@ -215,88 +233,88 @@ if __name__ == '__main__':
         # train_predict_list = np.array(train_predict_list,dtype=np.int32).flatten()
 
         # 0:其他 1：皮肤，2：衣物，3：植物
-        target_names = ['other', 'skin_', 'cloth', 'plant']
-        res = classification_report(train_label_list, train_predict_list, target_names=target_names, output_dict=True)
-        for k in target_names:
-            # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
-            print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
-
-        print('all train accuracy:', res['accuracy'], 'all train macro avg f1', res['macro avg']['f1-score'])
-        print('\n')
-
-        # scheduler.step(tra_acc)
-        # scheduler.step()
-        # lr_adjust.step()
-        print('learning rate = ', optimizer.state_dict()['param_groups'][0]['lr'])
-        # trainLossTotal = 0
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache()
-        model.eval()
-        # 测试
-        testCorrect = 0
-        testTotal = 0
-        test_label_list = []
-        test_predict_list = []
-        test_eopch_time = []
-        for i, data in enumerate(testLoader, 0):
-            img, label = data
-            # img = torch.tensor(img)
-            # label = torch.tensor(label)
-            # img, label = torch.tensor(img).float().cuda(), torch.tensor(label).float().cuda()
-            img, label = Variable(img).float().to(device), Variable(label).float().to(device)
-            if model_select == 0 or model_select == 3:
-                # img =
-                tmp = torch.Tensor(img.size(0), 7, img.size(2), img.size(3)).to(device)
-                # print(img[:, :3].size())
-                # print(type(img[:, :3]))
-
-                tmp[:, :3] = colors.rgb_to_yuv(img[:, :3])
-
-                tmp[:, 4] = img[:, 0] - img[:, 1]
-                tmp[:, 5] = img[:, 1] - img[:, 2]
-                tmp[:, 6] = img[:, 2] - img[:, 3]
-                tmp[:, 3] = img[:, 3]
-            else:
-                tmp = img[:,:3,:,:]
-            # tmp = torch.Tensor(img).to(mDevice)
-            # img = img.permute(0, 3, 1, 2)
-            # img = img.permute(0, 2, 3, 1)
-            # img = img.unsqueeze(1)  # 增加通道维度
-            testTotal += label.size(0)
-
-            with torch.no_grad():
-                t_b = time.time()
-                predict = model(tmp)
-                predict = torch.squeeze(predict)
-                # 计算正确率
-                predictIndex = torch.argmax(predict, dim=1)
-                t_e = time.time()
-                t_pre = t_e-t_b
-                test_eopch_time.append(t_pre)
-
-                labelIndex = torch.argmax(label, dim=1)
-                testCorrect += (predictIndex == labelIndex).sum()
-
-                predictIndex = predictIndex.cpu().detach().numpy()
-                labelIndex = labelIndex.cpu().detach().numpy()
-                test_label_list.extend(labelIndex)
-                test_predict_list.extend(predictIndex)
-        test_eopch_time = np.array(test_eopch_time)
-        test_time.append(np.nanmean(test_eopch_time))
-        print('\n')
-        print('test epoch:', epoch, ' acc : ', testCorrect.item() / testTotal)
-        # test_label_list = np.array(test_label_list,dtype=np.int32).flatten()
-        # test_predict_list = np.array(test_predict_list,dtype=np.int32).flatten()
-        target_names = ['other', 'skin_', 'cloth', 'plant']
-        res = classification_report(test_label_list, test_predict_list, target_names=target_names, output_dict=True)
-        for k in target_names:
-            # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
-            print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
-        print('all test accuracy:', res['accuracy'], 'all test macro avg f1', res['macro avg']['f1-score'])
-        print('\n')
+        # target_names = ['other', 'skin_', 'cloth', 'plant']
+        # res = classification_report(train_label_list, train_predict_list, target_names=target_names, output_dict=True)
+        # for k in target_names:
+        #     # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
+        #     print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
+        #
+        # print('all train accuracy:', res['accuracy'], 'all train macro avg f1', res['macro avg']['f1-score'])
+        # print('\n')
+        #
+        # # scheduler.step(tra_acc)
+        # # scheduler.step()
+        # # lr_adjust.step()
+        # print('learning rate = ', optimizer.state_dict()['param_groups'][0]['lr'])
+        # # trainLossTotal = 0
+        # torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        # model.eval()
+        # # 测试
+        # testCorrect = 0
+        # testTotal = 0
+        # test_label_list = []
+        # test_predict_list = []
+        # test_eopch_time = []
+        # for i, data in enumerate(testLoader, 0):
+        #     img, label = data
+        #     # img = torch.tensor(img)
+        #     # label = torch.tensor(label)
+        #     # img, label = torch.tensor(img).float().cuda(), torch.tensor(label).float().cuda()
+        #     img, label = Variable(img).float().to(device), Variable(label).float().to(device)
+        #     if model_select == 0 or model_select == 3:
+        #         # img =
+        #         tmp = torch.Tensor(img.size(0), 7, img.size(2), img.size(3)).to(device)
+        #         # print(img[:, :3].size())
+        #         # print(type(img[:, :3]))
+        #
+        #         tmp[:, :3] = colors.rgb_to_yuv(img[:, :3])
+        #
+        #         tmp[:, 4] = img[:, 0] - img[:, 1]
+        #         tmp[:, 5] = img[:, 1] - img[:, 2]
+        #         tmp[:, 6] = img[:, 2] - img[:, 3]
+        #         tmp[:, 3] = img[:, 3]
+        #     else:
+        #         tmp = img[:,:3,:,:]
+        #     # tmp = torch.Tensor(img).to(mDevice)
+        #     # img = img.permute(0, 3, 1, 2)
+        #     # img = img.permute(0, 2, 3, 1)
+        #     # img = img.unsqueeze(1)  # 增加通道维度
+        #     testTotal += label.size(0)
+        #
+        #     with torch.no_grad():
+        #         t_b = time.time()
+        #         predict = model(tmp)
+        #         predict = torch.squeeze(predict)
+        #         # 计算正确率
+        #         predictIndex = torch.argmax(predict, dim=1)
+        #         t_e = time.time()
+        #         t_pre = t_e-t_b
+        #         test_eopch_time.append(t_pre)
+        #
+        #         labelIndex = torch.argmax(label, dim=1)
+        #         testCorrect += (predictIndex == labelIndex).sum()
+        #
+        #         predictIndex = predictIndex.cpu().detach().numpy()
+        #         labelIndex = labelIndex.cpu().detach().numpy()
+        #         test_label_list.extend(labelIndex)
+        #         test_predict_list.extend(predictIndex)
+        # test_eopch_time = np.array(test_eopch_time)
+        # test_time.append(np.nanmean(test_eopch_time))
+        # print('\n')
+        # print('test epoch:', epoch, ' acc : ', testCorrect.item() / testTotal)
+        # # test_label_list = np.array(test_label_list,dtype=np.int32).flatten()
+        # # test_predict_list = np.array(test_predict_list,dtype=np.int32).flatten()
+        # target_names = ['other', 'skin_', 'cloth', 'plant']
+        # res = classification_report(test_label_list, test_predict_list, target_names=target_names, output_dict=True)
+        # for k in target_names:
+        #     # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
+        #     print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
+        # print('all test accuracy:', res['accuracy'], 'all test macro avg f1', res['macro avg']['f1-score'])
+        # print('\n')
         # if (epoch + 1) % 5 == 0:
         if model_select==0:
             torch.save(model.state_dict(), model_path + str(epoch) + '.pkl')

@@ -3,9 +3,9 @@ import torch.nn as nn
 from torchvision import models
 
 class FcCNN(nn.Module):
-    def __init__(self, n_class):
+    def __init__(self, n_class, train=True):
         super(FcCNN,self).__init__()
-        self.base_model = models.vgg16(pretrained=True)
+        self.base_model = models.vgg16(pretrained=train)
         layers = list(self.base_model.children())
         self.layer1 = layers[0]
 
