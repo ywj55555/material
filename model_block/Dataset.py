@@ -98,53 +98,58 @@ class Dataset_all(torch.utils.data.Dataset):
 
 class DatasetSpectralAndRgb(torch.utils.data.Dataset):
     # file_list为文件列表
-    def __init__(self, file_list, img_path, label_path, rbg_path, select_train_bands, nora, featureTrans, activate=None):
+    def __init__(self, file_list, img_path, label_path, rgb_path, select_train_bands, nora, featureTrans, activate=None):
         self.Data = file_list
-        self.img_path = img_path
-        self.rbg_path = rbg_path
-        self.label_path = label_path
+        self.img_paths = img_path
+        self.rgb_paths = rgb_path
+        self.label_paths = label_path
         self.select_train_bands = select_train_bands
         self.activate = activate
         self.featureTrans = featureTrans
         self.nora = nora
 
     def __getitem__(self, index):
-        if os.path.exists(self.label_path + self.Data[index] + '.png'):
-            imgLabel = io.imread(self.label_path + self.Data[index] + '.png')
-        else:
-            imgLabel = io.imread(hz_label + self.Data[index] + '.png')
-        imgData = None
-        if os.path.exists(self.img_path + self.Data[index][3:] + '.img'):
-            imgData = envi_loader(self.img_path, self.Data[index][3:], self.select_train_bands, False)
-        else:
-            print(self.Data[index][3:] + '.img not exist!!!')
+        if not isinstance(self.label_paths,list):
+            self.label_paths = [self.label_paths]
+        if not isinstance(self.rgb_paths,list):
+            self.rgb_paths = [self.rgb_paths]
+        if not isinstance(self.img_paths,list):
+            self.img_paths = [self.img_paths]
+
+        imgLabel = None
+        for label_path in self.label_paths:
+            if os.path.exists(label_path + self.Data[index] + '.png'):
+                imgLabel = io.imread(label_path + self.Data[index] + '.png')
+                break
+        if imgLabel is None:
+            print(self.Data[index] + '.png not exist!!!')
             sys.exit()
+
+        imgData = None
+        for img_path in self.img_paths:
+            if os.path.exists(img_path + self.Data[index][3:] + '.img'):
+                imgData = envi_loader(img_path, self.Data[index][3:], self.select_train_bands, False)
+                if self.featureTrans:
+                    print("kindsOfFeatureTransformation......")
+                    # 11 -》 21
+                    imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
+                else:
+                    if self.nora:
+                        imgData = envi_normalize(imgData)
+                break
         if imgData is None:
             print("Not Found ", self.Data[index][3:])
             sys.exit()
-        if self.featureTrans:
-            print("kindsOfFeatureTransformation......")
-            # 11 -》 21
-            imgData = kindsOfFeatureTransformation_slope(imgData, self.activate, self.nora)
-        else:
-            if self.nora:
-                imgData = envi_normalize(imgData)
-        rgbData = cv2.imread(self.rbg_path + self.Data[index] + '.png')  # 加载模式为 BGR
-        rgbData = rgbData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
-        # imgData_tmp = None
-        # if os.path.exists(waterImgRootPath + self.Data[index][3:] + '.img'):
-        #     imgData_tmp = envi_loader(waterImgRootPath, self.Data[index][3:], self.select_train_bands, False)
-        # elif os.path.exists(hangzhou_img_path + self.Data[index][3:] + '.img'):
-        #     imgData_tmp = envi_loader(hangzhou_img_path, self.Data[index][3:], self.select_train_bands, False)
-        # if self.featureTrans:
-        #     imgData_tmp = kindsOfFeatureTransformation(imgData_tmp)
-        # else:
-        #     imgData_tmp = envi_normalize(imgData_tmp)
-        # if os.path.exists(png_path + self.Data[index] + '.png'):
-        #     rgbData_tmp = cv2.imread(png_path + self.Data[index] + '.png')
-        # else:
-        #     rgbData_tmp = cv2.imread(hz_png_path + self.Data[index] + '.png')
-        # rgbData_tmp = rgbData_tmp.astype(np.float64)[:, :, ::-1]
+
+        rgbData = None
+        for rbg_path in self.rgb_paths:
+            if os.path.exists(rbg_path + self.Data[index] + '.png'):
+                rgbData = cv2.imread(rbg_path + self.Data[index] + '.png')  # 加载模式为 BGR
+                rgbData = rgbData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+                break
+        if rgbData is None:
+            print(self.Data[index] + '.png RGB not exist!!!')
+            sys.exit()
         return imgData, rgbData.copy(), imgLabel
         # return imgData_tmp, rgbData_tmp.copy(), imgLabel
     def __len__(self):

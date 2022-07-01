@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 from model_block.materialNet import MaterialSubModel
-from model_block.PP_liteseg_final import PPLiteSeg, PPLiteAddSpectralSeg
+from model_block.PP_liteseg_final import PPLiteSeg, PPLiteAddSpectralSeg,PPLiteRgbCatSpectral
 from model_block.materialNet import *
 from utils.load_spectral import *
 import gc
@@ -36,23 +36,34 @@ hangzhou_img_path = '/home/cjl/ssd/dataset/hangzhou/'
 waterImgRootPathList = ['train']#test
 # select_bands = [2,36,54,61,77,82,87,91,95,104,108]
 # select_bands = [x + 5 for x in  select_bands]
-select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 92]  # 模型选择结果波段
+# select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 92]  # 模型选择结果波段
+select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 93, 88]  # 模型选择结果波段
 # select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
 # select_bands = [x for x in range(128)]
 cm_bin_sizes = [4, 8, 16]
-spectral_inter_chs = [24, 32, 64, 96, 128]
+spectral_inter_chs = [18, 24, 32, 64, 96]
 # imgpath
 label_data_dir = '/home/cjl/dataset/label/'
 png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
 hz_png_path = '/home/cjl/ssd/dataset/hangzhou/rgb/'
-# png_path = 'E:/tmp/water/daytime/rgb/'
 
-# csv2_save_path = log+'class4_allFile500_acc.csv'
-# model_dict = {1:'ori_model_hz',2:'ori_model_hz'}
+sz_img = '/home/cjl/ssd/dataset/shenzhen/img/train/'
+sz_label = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
+sz_png = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
+
+hf_img = '/home/cjl/ssd/dataset/hefei/img/'
+hf_png = '/home/cjl/ssd/dataset/hefei/needtrain/'
+hf_label = '/home/cjl/ssd/dataset/hefei/label/'
+hf_png_test = '/home/cjl/ssd/dataset/hefei/needtest/'
+
+hz_label = '/home/cjl/ssd/dataset/hangzhou/label/'
+hz_png = '/home/cjl/ssd/dataset/hangzhou/rgb/'
+hz_img = '/home/cjl/ssd/dataset/hangzhou/'
+
 class_nums = 2
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = './PPLiteSeg_SpectralAddRGBAddHZ_500000_0.001_2_1217/'
+model_path = './model/PPLiteRgbCatSpectral_SzHz_500000_0.001_2_1306/'
 LEN = 5
 featureTrans = False
 if featureTrans:
@@ -61,7 +72,7 @@ else:
     inputBands = len(select_train_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [124]]
+epoch_list = [str(x) for x in [118]]
 
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
@@ -77,6 +88,12 @@ std = torch.tensor([0.5, 0.5, 0.5]).cuda()
 # csv2_header = ['micro accuracy']
 # f2_csv.writerow(csv2_header)
 print(inputBands)
+file_list = HfTrain + HfTest
+file_list.sort()
+print("the number of test file:", len(file_list))
+test_batch = 4
+cnt = math.ceil(len(file_list) / test_batch)
+print(test_batch, cnt)
 
 for epoch in epoch_list:
 # MaterialModel input size in training = (m, channels, length, length)  (length == 11)
@@ -90,42 +107,18 @@ for epoch in epoch_list:
     # model.load_state_dict(torch.load('./model/lr-4/' + epoch + '.pkl'))
     # model = MaterialBigModel(inputBands, class_nums,len_features = 32, mid_channel1 = 16).cuda()
     # model = MaterialSubModel(inputBands, class_nums).cuda()
-    model = PPLiteAddSpectralSeg(num_classes=3, input_channel=3, spectral_input_channels=inputBands,
+    model = PPLiteRgbCatSpectral(num_classes=2, input_channel=3, spectral_input_channels=inputBands,
                              cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs).cuda()
     model.load_state_dict(torch.load(model_path + epoch + '.pkl'))
     model.eval()  # 测试
     # 一定要加测试模式 有BN层或者dropout 的都需要，最好一直有
-    # model.eval()
-
     label_list = []
     predict_list = []
     count_right = 0
     count_tot = 0
     result_dir = './resTrain/' + model_path[2:] + epoch + '/'
-    # result_dir_label = './res/'+ epoch + '/'
-    # file_list = Shenzhen_test
-    # file_list = waterFile
-    file_list = waterFile
-
-    # file_list = [x[3:] for x in file_list]
-    print("the number of test file:",len(file_list))
-    # if FOR_TESTSET == 0:
-    #     file_list = trainFile_hz
-    #     # result_dir = './output_mulpng_add_sh_data_ori_3ker_patch/' + epoch + '/test/'
-    # elif FOR_TESTSET == 1:
-    #     file_list = testFile_hz
-    # elif FOR_TESTSET == 2:
-    #     file_list = trainFile
-    # elif FOR_TESTSET == 3:
-    #     file_list = testFile
-    # else:
-    #     print("please check FOR_TESTSET !")
-    #     break
-
     mkdir(result_dir)
     # mkdir(result_dir_label)
-    cnt = math.ceil(len(file_list)/test_batch)
-    print(test_batch, cnt)
     model.eval()  # 测试
     for i in range(cnt):
         file_tmp = file_list[i*test_batch:(i+1)*test_batch if (i+1)<cnt else len(file_list)]
@@ -133,8 +126,8 @@ for epoch in epoch_list:
         rgbData = []
         for filename in file_tmp:
             imgData_tmp = None
-            if os.path.exists(waterImgRootPath + filename[3:] + '.img'):
-                imgData_tmp = envi_loader(waterImgRootPath, filename[3:], select_train_bands, False)
+            if os.path.exists(hf_img + filename[3:] + '.img'):
+                imgData_tmp = envi_loader(hf_img, filename[3:], select_train_bands, False)
             elif os.path.exists(hangzhou_img_path + filename[3:] + '.img'):
                 imgData_tmp = envi_loader(hangzhou_img_path, filename[3:], select_train_bands, False)
             if imgData_tmp is None:
@@ -149,17 +142,19 @@ for epoch in epoch_list:
                 # imgData_tmp = envi_normalize(imgData_tmp)
             imgData.append(imgData_tmp)
 
-            if os.path.exists(png_path + filename + '.png'):
-                rgbData_tmp = cv2.imread(png_path + filename + '.png')
+            if os.path.exists(hf_png + filename + '.png'):
+                rgbData_tmp = cv2.imread(hf_png + filename + '.png')
+            elif os.path.exists(hf_png_test + filename + '.png'):
+                rgbData_tmp = cv2.imread(hf_png_test + filename + '.png')
             else:
-                rgbData_tmp = cv2.imread(hz_png_path + filename + '.png')
+                print("Not Found ", filename, '.png')
+                continue
             rgbData_tmp = rgbData_tmp.astype(np.float64)[:, :, ::-1]
             rgbData.append(rgbData_tmp)
 
         imgData = np.array(imgData)
         inputData = torch.tensor(imgData).float().cuda()
-        inputData = inputData.permute(0, 3, 1, 2)
-
+        inputData = inputData.permute(0, 3, 1, 2) # B C H W
         rgbData = np.array(rgbData)
         rgbData = torch.tensor(rgbData).float().cuda()
         rgbData = rgbData / 255.0
@@ -181,38 +176,29 @@ for epoch in epoch_list:
             outadd = torch.argmax(outadd, dim=1)
             predadd = outadd.detach().cpu().numpy()
             predict_ind = np.int32(predadd)
-
             del predict
             del outadd
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
-            # predict_ind = torch.argmax(predict, dim=1)
-            # predict_ind = predict_ind.cpu().detach().numpy()
-        #print(np.unique(predict_ind))
 
-        # generate result
-        #     rows, cols = predict_ind.shape
             png_num = predict_ind.shape[0]
             for png_i in range(png_num):
                 png_path_single = png_path + file_tmp[png_i] + '.png'
                 # print(png_path_single)
                 # if not os.path.exists(png_path_single):
                 #     continue
-                if os.path.exists(png_path + file_tmp[png_i]  + '.png'):
-                    imgGt = cv2.imread(png_path + file_tmp[png_i]  + '.png')
+                if os.path.exists(hf_png + file_tmp[png_i]  + '.png'):
+                    imgGt = cv2.imread(hf_png + file_tmp[png_i]  + '.png')
+                elif os.path.exists(hf_png_test + file_tmp[png_i]  + '.png'):
+                    imgGt = cv2.imread(hf_png_test + file_tmp[png_i]  + '.png')
                 else:
-                    imgGt = cv2.imread(hz_png_path + file_tmp[png_i]  + '.png')
+                    continue
                 # imgGt = cv2.imread(png_path + file_tmp[png_i] + '.png')
                 # imgGt = imgGt[5:-5,5:-5]
 
                 imgRes = imgGt
                 for color_num in [1]:
                     imgRes = mask_color_img(imgRes,mask=(predict_ind[png_i] == color_num),color=color_class[color_num-1],alpha=0.6 )
-                # imgRes = np.zeros((rows, cols, 3), np.uint8)
-                # imgRes[predict_ind == 1, 2] = 255
-                # imgRes[predict_ind == 2, 0] = 255
-                # imgRes[predict_ind == 3, 1] = 255
-                # print(result_dir + file_tmp[png_i] + '.png')
                 cv2.imwrite(result_dir + file_tmp[png_i] + '.png', imgRes)
                 # cv2.imwrite(result_dir_label + file_tmp[png_i] + '.png', predict_ind[png_i])
 

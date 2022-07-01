@@ -9,11 +9,11 @@ from utils.parse_args import parse_args
 from model_block.Dataset import *
 from data.dictNew import *
 from torch.autograd import Variable
-# os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 # CUDA:0
 from model_block.criterion import OhemCrossEntropy
 from torch.cuda.amp import autocast, GradScaler
-
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 args = parse_args()
 # batchsize 也可以改 目前为32
@@ -29,17 +29,20 @@ mtrainBatchSize = args.batchsize #后期增加一个训练图变成38 整除2，
 # 分类准确率要用三个零
 # mLearningRate = 0.001
 # mLearningRate = 2.5e-05
-mDevice=torch.device("cuda")
+mDevice=torch.device("cuda:0")
 
-waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
-waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
-png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
+sz_img = '/home/cjl/ssd/dataset/shenzhen/img/train/'
+sz_label = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
+sz_png = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
+
 hf_img = '/home/cjl/ssd/dataset/hefei/img/'
 hf_png = '/home/cjl/ssd/dataset/hefei/needtrain/'
 hf_label = '/home/cjl/ssd/dataset/hefei/label/'
+
 hz_label = '/home/cjl/ssd/dataset/hangzhou/label/'
-hz_png_path = '/home/cjl/ssd/dataset/hangzhou/rgb/'
+hz_png = '/home/cjl/ssd/dataset/hangzhou/rgb/'
 hz_img = '/home/cjl/ssd/dataset/hangzhou/'
+
 select_train_bands = [123,  98, 114, 100, 109, 112, 108, 102, 81, 125, 53, 93, 88]  # 模型选择结果波段
 
 # select_train_bands = [2,36,54,61,77,82,87,91,95,104,108]  # 手动选取波段
@@ -54,7 +57,7 @@ class_num = 2
 min_kept = args.min_kept
 OhemCrossEntropy_thres = 0.9
 band_sum = np.sum(np.array(select_train_bands))
-model_path = './PPLiteRgbCatSpectral_Hf_' + str(min_kept) + '_' + str(mLearningRate) + '_' + \
+model_path = './model/PPLiteRgbCatSpectral_SzHz_' + str(min_kept) + '_' + str(mLearningRate) + '_' + \
              str(mtrainBatchSize) + '_' + str(band_sum) + '/'
 # model_path = './PPLiteSeg_Spectral_hand_Select_Band' + str(min_kept) + '_' + str(mLearningRate) + '_' + \
 #              str(mtrainBatchSize) + '_' + str(band_sum) + '/'
@@ -66,8 +69,8 @@ print('mLearningRate',mLearningRate)
 print('featureTrans', featureTrans)
 print('min_kept', min_kept)
 print('nora',nora)
-mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
-std = torch.tensor([0.5, 0.5, 0.5]).cuda()
+mean = torch.tensor([0.5, 0.5, 0.5]).to(mDevice)
+std = torch.tensor([0.5, 0.5, 0.5]).to(mDevice)
 num_classes = 2
 def adjust_learning_rate(optimizer, base_lr, max_iters,
         cur_iters, power=0.9, nbb_mult=10):
@@ -90,15 +93,15 @@ if __name__ == '__main__':
     # 使用非确定性算法
     torch.backends.cudnn.enabled = True
     mkdir(model_path)
-    trainFile = SeaFile + HangZhouTrain
-    trainDataset = DatasetSpectralAndRgb(HfTrain, hf_img, hf_label, hf_png, select_train_bands, nora, featureTrans)
-    testDataset = DatasetSpectralAndRgb(waterFileHZ, hz_img, hz_label, hz_png_path, select_train_bands, nora, featureTrans)
+    trainDataset = DatasetSpectralAndRgb(SeaFile + waterFileHZ,[hz_img, sz_img], [hz_label, sz_label],
+                                         [hz_png, sz_png], select_train_bands, nora, featureTrans)
+    testDataset = DatasetSpectralAndRgb(HfTrain, hf_img, hf_label, hf_png, select_train_bands, nora, featureTrans)
     trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
     testLoader = DataLoader(dataset=testDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
 
     # model = PPLiteSeg(num_classes=3, input_channel=3, cm_bin_sizes=cm_bin_sizes).cuda() # PPLiteAddSpectralSeg
     model = PPLiteRgbCatSpectral(num_classes=num_classes, input_channel=3, spectral_input_channels=input_bands_nums,
-                                 cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs).cuda()
+                                 cm_bin_sizes=cm_bin_sizes, spectral_inter_chs=spectral_inter_chs).to(mDevice)
     # model = PPLiteSeg(num_classes=3, input_channel=input_bands_nums).cuda()
     # model = MaterialSubModel(in_channels=input_bands_nums, out_channels=class_num).cuda()
     # model.load_state_dict(torch.load(r"/home/cjl/ywj_code/code/Multi-category_all/model_ori/4.pkl"))
@@ -110,7 +113,7 @@ if __name__ == '__main__':
                                  min_kept=min_kept,
                                  weight=None,
                                  model_num_outputs=3,
-                                 loss_balance_weights=[1, 1, 1])
+                                 loss_balance_weights=[1, 1, 1]).to(mDevice)
     optimizer = torch.optim.Adam(model.parameters(), lr=mLearningRate)
     # optimizer = torch.optim.AdamW(model.parameters(),lr=mLearningRate)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.8, last_epoch=-1)
@@ -129,7 +132,9 @@ if __name__ == '__main__':
         count_tot = 0
         for i, data in enumerate(trainLoader, 0):
             img, rgb_data, label = data #label 需要改成 0，1，2，3，4 的形式 4表示其他
-            img, rgb_data, label = Variable(img).float().cuda(), Variable(rgb_data).float().cuda(), Variable(label).long().cuda()
+            img, rgb_data, label = Variable(img).float().to(mDevice), Variable(rgb_data).float().to(mDevice), \
+                                   Variable(label).long().to(mDevice)
+            label[label == 2] = 0  # 后续只标注0类别
             img = img.permute(0, 3, 1, 2)
             rgb_data = rgb_data / 255.0
             rgb_data -= mean
@@ -193,8 +198,8 @@ if __name__ == '__main__':
         # predict_list = []
         for i, data in enumerate(testLoader, 0):
             img, rgb_data, label = data
-            img, rgb_data, label = Variable(img).float().cuda(), Variable(rgb_data).float().cuda(), Variable(
-                label).long().cuda()
+            img, rgb_data, label = Variable(img).float().to(mDevice), Variable(rgb_data).float().to(mDevice),\
+                                   Variable(label).long().to(mDevice)
             label[label == 2] = 0  # 后续只标注0类别
             img = img.permute(0, 3, 1, 2)
             rgb_data = rgb_data / 255.0

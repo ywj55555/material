@@ -229,4 +229,4 @@ res
 *.xml
 .idea
 *.npy
-
+rgbModel/resTrain
