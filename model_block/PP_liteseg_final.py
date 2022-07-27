@@ -1035,7 +1035,7 @@ import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import warnings
 warnings.filterwarnings("ignore")
-from torch.cuda.amp import autocast, GradScaler
+# from torch.cuda.amp import autocast, GradScaler
 if __name__ == "__main__":
     cm_bin_sizes = [4, 8, 16]
     spectral_inter_chs = [24, 32, 64, 96, 128]

@@ -1,4 +1,6 @@
 import numpy as np
+import sys
+sys.path.append('../')
 import os
 import cv2
 from tqdm import tqdm
@@ -77,11 +79,13 @@ def val_label(png_path, label_path, save_path, label_nums=2):
 if __name__ == '__main__':
     # pass
     # rgb_list = get_random_rgb(4)
+    labelpath = 'D:/dataset/shuichi_label/'
+    pngpath = 'D:/dataset/shuichi/need_mark/'
     png_path = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
     waterLabelPath = 'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
-    save_path = 'D:/ZY2006224YWJ/spectraldata/RiverSkinDetection_rend/'
+    save_path = 'D:/dataset/shuichi/mark_rend/'
     mkdir(save_path)
-    val_label(png_path, waterLabelPath, save_path, 3)
+    val_label(pngpath, labelpath, save_path, 3)
     # png_path = r'D:\ZY2006224YWJ\material-extraction\needMark' + '\\'
     # label_path = r'D:\ZY2006224YWJ\material-extraction\needMark\backup\finalLabel' + '\\'
     # test_batch = 4

@@ -35,15 +35,18 @@ plt.rcParams["axes.unicode_minus"] = False
 point = [355, 390]
 density_list = []
 tifflist = os.listdir(root_path)
-
+tifflist = tifflist[4:]
 patch = 8
 for tiff in tifflist:
     if tiff[-3:] != 'png':
         continue
     tif = TIFF.open(img_path + tiff[:-4] + '.tiff', mode='r')
     image = tif.read_image()
-    density_image = np.max(image[:, :, :9], axis=2)
+    density_image = np.mean(image[:, :, :9], axis=2)
     density = np.mean(density_image[point[0] - patch: point[0] + patch, point[1] - patch:point[1] + patch])
+    ndwi_image = (image[:, :, 0] - image[:, :, 7]) / (image[:, :, 0] + image[:, :, 7])
+    ndwi = np.mean(ndwi_image[point[0] - patch: point[0] + patch, point[1] - patch:point[1] + patch])
+    density = density * ndwi
     density_list.append(density)
     # 画图，plt.bar()可以画柱状图
 print(density_list)
@@ -51,15 +54,15 @@ x_list = [x for x in range(len(density_list))]
 for i in range(len(x_list)):
     print(x_list[i], density_list[i])
     plt.bar(x_list[i], density_list[i])
-# 设置图片名称
-plt.title("泥沙浓度-光谱曲线")
+# 设置图片名称 Divided ndwi Multiplied ndwi
+plt.title("Sediment concentration Multiplied ndwi histogram")
 # 设置x轴标签名
-plt.xlabel("泥沙浓度")
+plt.xlabel("sediment concentration")
 # 设置y轴标签名
-plt.ylabel("泥沙-光谱曲线强度")
+plt.ylabel("the intensity of Sediment concentration Multiplied ndwi") # intensity concentration
 # plt.ylim(2000,3500)
 # 显示
-plt.savefig(save_path + 'nisha_bar.png')
+plt.savefig(save_path + 'nisha_Multiplied_ndwi_density.png')
 plt.show()
 
     # cv.imwrite(save_path + tiff[:-5] + '.png',

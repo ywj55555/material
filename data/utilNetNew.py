@@ -18,7 +18,7 @@ import copy
 code2label = [0,2,2,2,0,2,2,2,1,0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0] #1:skin 2:cloth 3:plant 0:other
 # label2class = [255,1,2,0]
 # label2class = [0,1,2]
-from waterAndSkinModel import class_nums
+from waterModeldraft import class_nums
 label2class = range(class_nums)
 label2target = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
@@ -184,6 +184,11 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
     elif dataType =='RiverSkinDetection1':
         labelpath = skinAndWaterLabelPath
         imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
+    elif dataType == 'draft':
+        labelpath = '/home/cjl/ssd/dataset/HIK/shuichi_label/'
+        imgpath = '/home/cjl/ssd/dataset/HIK/shuichi/img/'
+        print(labelpath)
+        print(imgpath)
     else:
         labelpath = skinAndWaterLabelPath
         imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
@@ -198,8 +203,8 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
         # imgData = envi_loader(os.path.join(env_data_dir,file[:8])+'/', file,nora)
         # 读取img文件
         imgData = None
-        if os.path.exists(imgpath + file + '.img'):
-            imgData = envi_loader(imgpath, file, bands, False)
+        if os.path.exists(imgpath + file[3:] + '.img'):
+            imgData = envi_loader(imgpath, file[3:], bands, False)
         else:
             print(file, 'not found!!!')
             continue
@@ -291,6 +296,8 @@ def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, act
         dataFile = RiverSkinDetection3
     elif dataType == 'RiverSkinDetectionAll':
         dataFile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
+    elif dataType == 'draft':
+        dataFile = hk_draft
     else:
         dataFile = RiverSkinDetectionTest
     # 启动多个进程 分发文件列表

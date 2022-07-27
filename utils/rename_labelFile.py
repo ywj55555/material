@@ -3,8 +3,8 @@ import re
 # from utils.os_helper import mkdir
 import shutil
 
-labelpath = 'D:/ZY2006224YWJ/spectraldata/label/.imageLabelingSessionwater2_SessionData/'
-pngpath = 'D:/ZY2006224YWJ/spectraldata/RiverSkinDetection2/'
+labelpath = 'D:/dataset/shuichi_label/'
+pngpath = 'D:/dataset/shuichi/need_mark/'
 labels = os.listdir(labelpath)
 labels.sort(key=lambda x: int(re.findall(r'\d+', x)[0]))
 pngs = os.listdir(pngpath)

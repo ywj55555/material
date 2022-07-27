@@ -2,7 +2,7 @@ import os
 
 import cv2
 
-tifpath = 'D:/dataset/lg/20220424rgb/'
+tifpath = 'D:/dataset/shuichi/rgb/'
 
 tiflists = os.listdir(tifpath)
 

@@ -60,10 +60,13 @@ hz_label = '/home/cjl/ssd/dataset/hangzhou/label/'
 hz_png = '/home/cjl/ssd/dataset/hangzhou/rgb/'
 hz_img = '/home/cjl/ssd/dataset/hangzhou/'
 
+shuichi_img = 'D:/dataset/shuichi/img/'
+shuichi_rgb = 'D:/dataset/shuichi/rgb/'
+
 class_nums = 2
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = './model/PPLiteRgbCatSpectral_SzHz_500000_0.001_2_1306/'
+model_path = './model/new_'
 LEN = 5
 featureTrans = False
 if featureTrans:
@@ -72,7 +75,7 @@ else:
     inputBands = len(select_train_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [118]]
+epoch_list = [str(x) for x in [150]]
 
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
@@ -88,7 +91,7 @@ std = torch.tensor([0.5, 0.5, 0.5]).cuda()
 # csv2_header = ['micro accuracy']
 # f2_csv.writerow(csv2_header)
 print(inputBands)
-file_list = HfTrain + HfTest
+file_list = hk_shuichi
 file_list.sort()
 print("the number of test file:", len(file_list))
 test_batch = 4
@@ -116,7 +119,7 @@ for epoch in epoch_list:
     predict_list = []
     count_right = 0
     count_tot = 0
-    result_dir = './resTrain/' + model_path[2:] + epoch + '/'
+    result_dir = './resTrain/shuichi_' + model_path[2:] + epoch + '/'
     mkdir(result_dir)
     # mkdir(result_dir_label)
     model.eval()  # 测试
@@ -126,8 +129,8 @@ for epoch in epoch_list:
         rgbData = []
         for filename in file_tmp:
             imgData_tmp = None
-            if os.path.exists(hf_img + filename[3:] + '.img'):
-                imgData_tmp = envi_loader(hf_img, filename[3:], select_train_bands, False)
+            if os.path.exists(shuichi_img + filename[3:] + '.img'):
+                imgData_tmp = envi_loader(shuichi_img, filename[3:], select_train_bands, False)
             elif os.path.exists(hangzhou_img_path + filename[3:] + '.img'):
                 imgData_tmp = envi_loader(hangzhou_img_path, filename[3:], select_train_bands, False)
             if imgData_tmp is None:
@@ -142,8 +145,8 @@ for epoch in epoch_list:
                 # imgData_tmp = envi_normalize(imgData_tmp)
             imgData.append(imgData_tmp)
 
-            if os.path.exists(hf_png + filename + '.png'):
-                rgbData_tmp = cv2.imread(hf_png + filename + '.png')
+            if os.path.exists(shuichi_rgb + filename + '.png'):
+                rgbData_tmp = cv2.imread(shuichi_rgb + filename + '.png')
             elif os.path.exists(hf_png_test + filename + '.png'):
                 rgbData_tmp = cv2.imread(hf_png_test + filename + '.png')
             else:
@@ -187,8 +190,8 @@ for epoch in epoch_list:
                 # print(png_path_single)
                 # if not os.path.exists(png_path_single):
                 #     continue
-                if os.path.exists(hf_png + file_tmp[png_i]  + '.png'):
-                    imgGt = cv2.imread(hf_png + file_tmp[png_i]  + '.png')
+                if os.path.exists(shuichi_rgb + file_tmp[png_i]  + '.png'):
+                    imgGt = cv2.imread(shuichi_rgb + file_tmp[png_i]  + '.png')
                 elif os.path.exists(hf_png_test + file_tmp[png_i]  + '.png'):
                     imgGt = cv2.imread(hf_png_test + file_tmp[png_i]  + '.png')
                 else:

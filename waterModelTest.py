@@ -25,7 +25,8 @@ waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 # waterImgRootPath = 'D:/ZF2121133HHX/water/daytime/'
 waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 labelpath = 'D:/ZY2006224YWJ/spectraldata/trainLabel/'
-imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
+
+imgpath = '/home/cjl/ssd/dataset/HIK/shuichi/img/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 # waterImgRootPathList = ['vedio1', 'vedio2', 'vedio3', 'vedio4', 'vedio5', 'vedio6', 'vedio7']
@@ -36,15 +37,15 @@ select_bands = [22, 38, 57, 68, 77, 86, 90, 100, 105, 112, 115, 123]
 # select_bands = [x for x in range(128)]
 # imgpath
 # label_data_dir = '/home/cjl/dataset/label/'
-png_path = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+png_path = '/home/cjl/ssd/dataset/HIK/shuichi/rgb/'
 # png_path = 'E:/tmp/water/daytime/rgb/'
 
 # csv2_save_path = log+'class4_allFile500_acc.csv'
 # model_dict = {1:'ori_model_hz',2:'ori_model_hz'}
-class_nums = 4
+class_nums = 2
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = "./model/addWaterAndSkin3_64_0.001_True_False_False/"
+model_path = "/home/cjl/ssd/ywj/material/small_4_0.001_True_True_False_sig/"
 LEN = 5
 featureTrans = False
 if featureTrans:
@@ -53,7 +54,7 @@ else:
     inputBands = len(select_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [40, 50, 80, 150, 250]]
+epoch_list = [str(x) for x in [18, 25]]
 # epoch_list = [str(x) for x in []]
 # epoch_list = [str(x) for x in [299]]
 
@@ -77,6 +78,7 @@ for epoch in epoch_list:
     # model = MaterialSubModel(in_channels=inputBands, out_channels=class_nums).cuda()
     # model.load_state_dict(torch.load('./model/lr-4/' + epoch + '.pkl'))
     # model = MaterialBigModel(inputBands, class_nums,len_features = 32, mid_channel1 = 16).cuda()
+
     model = MaterialSubModel(inputBands, class_nums).cuda()
     model.load_state_dict(torch.load(model_path + epoch + '.pkl'))
     # 一定要加测试模式 有BN层或者dropout 的都需要，最好一直有
@@ -87,11 +89,11 @@ for epoch in epoch_list:
     count_right = 0
     count_tot = 0
     # result_dir = './resTrain/' + model_path[2:] + epoch + '/'
-    result_dir = './resTrain/RiverSkinDetectionLabel/' + epoch + '/'
+    result_dir = './resTrain/draft/' + epoch + '/'
     # result_dir_label = './res/'+ epoch + '/'
     # file_list = Shenzhen_test
     # file_list = waterFile
-    file_list = RiverSkinDetection3
+    file_list = hk_shuichi
 
     # file_list = [x for x in file_list]
     print("the number of test file:",len(file_list))
@@ -112,13 +114,14 @@ for epoch in epoch_list:
     # mkdir(result_dir_label)
     cnt = math.ceil(len(file_list)/test_batch)
     print(test_batch, cnt)
+
     for i in range(cnt):
         file_tmp = file_list[i*test_batch:(i+1)*test_batch if (i+1)<cnt else len(file_list)]
         imgData = []
         for filename in file_tmp:
             imgData_tmp = None
-            if os.path.exists(imgpath + filename + '.img'):
-                imgData_tmp = envi_loader(imgpath, filename, select_bands, False)
+            if os.path.exists(imgpath + filename[3:] + '.img'):
+                imgData_tmp = envi_loader(imgpath, filename[3:], select_bands, False)
             else:
                 print("Not Found ", filename)
                 continue
@@ -162,16 +165,19 @@ for epoch in epoch_list:
                 continue
             print(inputData.shape)
             inputData = inputData / torch.max(inputData, dim=1, keepdim=True)[0]
+            start = time.time()
             predict = model(inputData)
             del inputData
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
-            torch.cuda.empty_cache()
-            torch.cuda.empty_cache()
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             # predict = torch.squeeze(predict)
             predict_ind = torch.argmax(predict, dim=1)
             predict_ind = predict_ind.cpu().detach().numpy()
+            end = time.time()
+            print("average cost time : ", (end - start) / predict_ind.shape[0])
         #print(np.unique(predict_ind))
 
         # generate result
@@ -193,7 +199,9 @@ for epoch in epoch_list:
                 # imgRes[predict_ind == 2, 0] = 255
                 # imgRes[predict_ind == 3, 1] = 255
                 print(result_dir + file_tmp[png_i] + '.png')
-                cv2.imwrite(result_dir + file_tmp[png_i] + '.png', predict_ind[png_i])
+                cv2.imwrite(result_dir + file_tmp[png_i] + '.png', imgRes)
+        gc.collect()
+
                 # cv2.imwrite(result_dir_label + file_tmp[png_i] + '.png', predict_ind[png_i])
 
                 # img_label = cv2.imread(label_data_dir + file_tmp[png_i] + '.png', cv2.IMREAD_GRAYSCALE)
@@ -227,7 +235,7 @@ for epoch in epoch_list:
                 # count_right += (predict_0 + predict_1 + predict_2 + predict_3)
                 # count_tot += (gt_0 + gt_1 + gt_2 + gt_3)
 
-                gc.collect()
+
     # label_list = np.array(label_list).flatten()
     # predict_list = np.array(predict_list).flatten()
     # ind = (label_list != 255)

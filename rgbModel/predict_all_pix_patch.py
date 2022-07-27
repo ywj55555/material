@@ -31,13 +31,7 @@ label_path = '/home/cjl/ssd/dataset/water_skin_label/'
 
 log = './log/'
 mkdir(log)
-det_num = 50000
-# train_mean = np.array([1638.30293365, 1856.07645628, 2395.36102414, 2963.61267338, 3825.72213097,
-#  3501.42091296, 4251.15954562, 3965.7991342,  3312.6616123 ])
-# # train_mean = np.array(train_mean)
-# train_var = np.array([ 5402022.45076405,  6679240.29294402,  9629853.43114098, 15170998.1931259,
-#  25767233.41870246, 18716092.38116236, 18231725.96313715, 28552394.38170321,
-#  13127436.03417886])
+det_num = 15000
 train_mean = np.array([56.54884781, 45.74997012, 39.97695533])
 # train_mean = np.array(train_mean)
 train_var = np.array([3327.70049172, 1916.7318851, 1372.06279076])
@@ -72,14 +66,6 @@ model_path = model_list[model_select - 1]
 model.load_state_dict(torch.load(model_path))
 model.eval()
 
-csv2_save_path = log+'pix_predict'+model_str[model_select - 1]+'allpix.csv'
-f2 = open(csv2_save_path, 'w', newline='')
-f2_csv = csv.writer(f2)
-# csv2_header = ['micro accuracy','three_acc']
-csv2_header = ['micro accuracy']
-f2_csv.writerow(csv2_header)
-featureTrans = False
-
 result_dir = './res/'+model_str[model_select]+'pre_label'+'/' + epoch + '/'
 result_pred = './resTrain/' + "fc_cnn/" + epoch + '/'
 mkdir(result_dir)
@@ -99,50 +85,21 @@ print("the number of test file:",len(file_list))
 with torch.no_grad():
     for file in file_list:
         begin = time.time()
-        label_data = cv2.imread(label_path + file+'.png',cv2.IMREAD_GRAYSCALE)
-        # 要先计算训练集的均值和方差！！
-        # imgData = None
-        # if os.path.exists(waterImgRootPath + file[3:] + '.img'):
-        #     imgData = envi_loader(waterImgRootPath, file[3:], select_bands, False)
-        # else:
-        #     continue
-        # t3 = time.time()
-        # 没必要 特征变换 增加之前设计的斜率特征
+
         imgData = cv2.imread(png_path + file + '.png')
         imgData = imgData[:, :, ::-1].copy()
 
-
-        label_tmp = label_data[length_list[model_select]//2:-length_list[model_select]//2,
-                    length_list[model_select]//2:-length_list[model_select]//2]
-        # label_tmp = transformLabel(label_tmp, MUTI_CLASS_WATER) #255,0,1,2,3
-        label_fla = label_tmp.flatten()
-        tmp_w = label_tmp.shape[0]
-        tmp_h = label_tmp.shape[1]
+        tmp_w = imgData.shape[0] - (length_list[model_select]//2) * 2
+        tmp_h = imgData.shape[1] - (length_list[model_select]//2) * 2
         label_coor = [[x,y] for x in range(tmp_w) for y in range(tmp_h)]
         label_coor = np.array(label_coor)
-        # remain_index = label_fla!=255
-        # remain_pix = label_fla[remain_index]
 
-        # remain_coor = label_coor[remain_index]
-
-        # interval = remain_pix.shape[0]//det_num
-        # # det_pix = remain_pix[::interval]
-        # det_coor = remain_coor[::interval]
-        # remain_pix = remain_pix[::interval]
-        label_list.extend(label_fla)
-        # print(det_coor.shape[0])
-        # img_input = np.empty()
         pred_total = 0
         pred_correct = 0
         imgData = torch.from_numpy(imgData).float().cuda()
-        labelData = torch.from_numpy(label_fla).long().cuda()
 
-
-        # pred_total+=labelData.size()[0]
-        # imgdata = imgdata.float().cuda()
         imgData = imgData.unsqueeze(0)  # B H W C
-        # imgData = imgData.unsqueeze(0)
-        # imgData = imgData.permute(0, 3, 1, 2)
+
         cnt = math.ceil(len(label_coor)/det_num)
         predict_png = []
         for i in tqdm(range(cnt)):
@@ -168,14 +125,11 @@ with torch.no_grad():
             del predict
             del pix_data
             predict_ind = predict_ind.squeeze() #B
-            pred_correct += (predict_ind == labelData[i * det_num:(i + 1) * det_num if (i + 1) < cnt else len(label_coor)]).sum().item()
-
             predict_ind = predict_ind.cpu().numpy()
             predict_list.extend(predict_ind)
             predict_png.extend(predict_ind)
             torch.cuda.empty_cache()
             torch.cuda.empty_cache()
-
         predict_png = np.array(predict_png)
         predict_png = predict_png.reshape(tmp_w,tmp_h)
         print(predict_png.shape)
@@ -197,50 +151,10 @@ with torch.no_grad():
         torch.cuda.empty_cache()
         torch.cuda.empty_cache()
 
-        # for color_num in [1, 2,3]:
-        #     imgGt2 = mask_color_img(imgGt2,mask=(label_tmp == color_num),color=color_class[color_num-1],alpha=0.7 )
-        # imgGt2 = mask_color_img(imgGt2, mask=label_tmp == 0 , color=[125,125,125],
-        #                       alpha=0.7)
-        # cv2.imwrite(result_dir + file + '_gt.png', imgGt2)
-
-
-# label_list[label_list=]
-# 计算准确率：
-label_list = np.array(label_list).flatten()
-predict_list = np.array(predict_list).flatten()
-remain_pix = label_list!=255
-label_list = label_list[remain_pix]
-predict_list = predict_list[remain_pix]
-
-acc_nums = np.sum(label_list==predict_list)
 t2 = time.time()
-all_acc =acc_nums/len(label_list)
-
-
-
-print("all acc:",all_acc)
-
-
-# iou = np.sum(np.logical_and(label_list==predict_list,label_list!=0))
-# all_cnts = np.sum(label_list==1)+np.sum(label_list==2)+np.sum(label_list==3)
-# three_acc = iou/all_cnts
-# print("three acc:",three_acc)
 
 print("cost time",t2-t1,"s")
 print("average cost time",(t2-t1) / len(file_list),"s")
-# target_names = ['other','skin_','cloth','plant']
-# res = classification_report(label_list, predict_list, target_names=target_names,output_dict=True)
-#
-csv2_line = [all_acc]
-# # print('accuracy=', accuracy, 'micro=', micro, 'macro', macro)
-# for k in target_names:
-#     # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
-#     print(k, ' pre=', res[k]['precision'], ' rec=', res[k]['recall'], ' f1-score=', res[k]['f1-score'])
-#     csv2_line.extend([res[k]['precision'], res[k]['recall'], res[k]['f1-score']])
-# print('all test micro accuracy:', res['accuracy'], ' all test macro avg f1:', res['macro avg']['f1-score'])
-f2_csv.writerow(csv2_line)
-f2.close()
-output_log.close()
 
 
 

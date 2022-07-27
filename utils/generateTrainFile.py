@@ -20,19 +20,19 @@ for i in range(len(filelist)):
 trainf.close()
 '''
 
-tainpath = r'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+tainpath = 'D:/dataset/shuichi_label/'
 trainFile = os.listdir(tainpath)
 # test_list = random.sample(trainFile,int(len(trainFile)*0.2))
 
-train_file = './all_test_file.txt'
+train_file = './all_train_file.txt'
 # test_file = './test_file.txt'
 
 trainf = open(train_file,'w')
 # testf = open(test_file,'w')
-trainfile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
+# trainfile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
 
 for file in trainFile:
-    if file[-4:] != '.png' or file[-4:] in trainfile:
+    if file[-4:] != '.png':
         continue
     # if file in test_list:
     #     testf.write('\''+file[:-4]+'\','+'\n')
