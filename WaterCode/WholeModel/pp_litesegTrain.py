@@ -31,15 +31,9 @@ mtrainBatchSize = args.batchsize #后期增加一个训练图变成38 整除2，
 # mLearningRate = 2.5e-05
 mDevice=torch.device("cuda")
 
-waterImgRootPath = '/home/cjl/ssd/dataset/hefei/img/'
-waterLabelPath = '/home/cjl/ssd/dataset/hefei/label/'
-png_path = '/home/cjl/ssd/dataset/hefei/needtrain/'
-hz_label = '/home/cjl/ssd/dataset/hangzhou/label/'
-hz_png_path = '/home/cjl/ssd/dataset/hangzhou/rgb/'
-bmh_label = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
-bmh_png_path = '/home/cjl/dataset_18ch/waterBmh/'
-bmh_raw_path = '/home/cjl/dataset_18ch/waterBmh/'
-# bmh_png_path =
+waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
+waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
+png_path = '/home/cjl/ssd/dataset/shenzhen/rgb/needmark1/'
 select_train_bands = [114, 109, 125,  53, 108,  81, 100, 112,  25,  90,  96, 123 ]
 input_bands_nums = len(select_train_bands)
 nora = True
@@ -48,12 +42,11 @@ class_num = 2
 # 这个参数最好大一些！！！
 min_kept = args.min_kept
 OhemCrossEntropy_thres = 0.9
-num_classes = 2
-input_channel = 3
+
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
 
-model_path = './PPLiteSeg_BmhRgb' + str(min_kept) + '_' + str(mLearningRate) + '_' + str(mtrainBatchSize) + '/'
+model_path = './PPLiteSeg_' + str(min_kept) + '_' + str(mLearningRate) + '_' + str(mtrainBatchSize) + '/'
 
 print('mBatchSize',mtrainBatchSize)
 print('mEpochs',mEpochs)
@@ -84,17 +77,17 @@ if __name__ == '__main__':
     torch.backends.cudnn.enabled = True
     mkdir(model_path)
 
-    trainDataset = Dataset_RGB(bmhTrain, bmh_png_path, bmh_label)
-    testDataset = Dataset_RGB(bmhTest, bmh_png_path, bmh_label)
-    trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
-    testLoader = DataLoader(dataset=testDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
-    model = PPLiteSeg(num_classes=num_classes, input_channel=input_channel).cuda()
+    trainDataset = Dataset_RGB(SeaFile, png_path, waterLabelPath)
+    # testDataset = Dataset_all(testFile_hz,train_data)
+    trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True)
+    # testLoader = DataLoader(dataset=testDataset, batch_size=mtestBatchSize, shuffle=True)
+    model = PPLiteSeg(num_classes=3, input_channel=3).cuda()
     # model = MaterialSubModel(in_channels=input_bands_nums, out_channels=class_num).cuda()
     # model.load_state_dict(torch.load(r"/home/cjl/ywj_code/code/Multi-category_all/model_ori/4.pkl"))
     # criterion=nn.MSELoss()
     # criterion = nn.SmoothL1Loss()
     # criterion = nn.CrossEntropyLoss()
-    criterion = OhemCrossEntropy(ignore_label=-1,
+    criterion = OhemCrossEntropy(ignore_label=0,
                                  thres=OhemCrossEntropy_thres,
                                  min_kept=min_kept,
                                  weight=None,
@@ -123,6 +116,29 @@ if __name__ == '__main__':
             img -= mean
             img /= std
             img = img.permute(0, 3, 1, 2)
+            # img = torch.from_numpy(img)
+            # img = img.unsqueeze(0)
+            # img, label = torch.tensor(img).float().cuda(), torch.tensor(label).float().cuda()
+            # trainTotal += label.size(0)
+            # label1 = label  #B H W
+            # label1 = label.clone()
+
+            # 用于保存原label中 0，1，2；0表示未标注，不参与训练
+            # label2 = torch.stack([label for _ in range(class_num)], 3)  # B H W*4
+            # label2 = torch.stack([label, label, label, label], 3) #B H W*4
+            # label2 = label2.permute(0, 3, 1, 2)  # B*C*H*W,
+
+            # 把 class_num 类别赋值为0：其他类别
+            # mask = torch.zeros(label.size()).to(mDevice)  # B*H*W
+            # label = torch.where(label == class_num, mask, label)  # 第class_num类标签为0，0就代表其他类别
+            # label = label.long()  # index类型需转为整型
+            # one_hot = torch.nn.functional.one_hot(label, class_num) #2分类
+            # one_hot = one_hot.float()
+            # print('type:',type(one_hot))
+            # print('one_hot:',one_hot.size())
+            # one_hot = one_hot.permute(0, 3, 1, 2)# B * C * H * W,
+            # print('one_hot:',one_hot.size())
+            # img = img.permute(0, 3, 1, 2)
             with autocast():
                 predict = model(img)  # B*CLASS_NUM*H*W
             losses = criterion(predict, label)
@@ -136,11 +152,30 @@ if __name__ == '__main__':
             scaler.step(optimizer)
             scaler.update()
             # predict=model(img)
-            # predict = F.softmax(predict[0], dim=1)
             predictIndex = torch.argmax(predict[0], dim=1) #计算一下准确率和召回率 B*H*W 和label1一样
-            count_right += torch.sum(predictIndex == label).item()  # 全部训练
-            # count_right += torch.sum((predictIndex == label) & (label != 0)).item()
-            count_tot += torch.sum(label != -1).item()
+            # label[label == 0] = 255  # 255表示无标签位置
+            # label1[label1 == class_num] = 0  # 0表示其他类别位置
+            # label1 = label1.long()
+            # tlabel = label1.clone()
+            count_right += torch.sum((predictIndex == label) & (label != 0)).item()
+            count_tot += torch.sum(label != 0).item()
+            # #  label2=0 的地方 是未标注区域，直接赋值为真实标签，相当于不训练！！！
+            # predict = torch.where(label2 == 0, one_hot, predict)  # label中没有标签的位置直接预测为真实值，也就相当于不参与loss的计算,而第四类转成了0，此时也会计算
+            # # criterion 为 CrossEntropyLoss
+            # loss = criterion(predict, label)
+
+            # criterion 为 SmoothL1Loss
+            # loss = criterion(predict, one_hot)
+
+            # loss = focal_dice_loss(predict, one_hot,tlabel,0.5,weight_fun = 3,exp=10) #0,1,2,3,255
+            # loss = focus_loss(class_num,predict, label)
+            # trainLossTotal += loss.item()
+            # optimizer.zero_grad()
+            # loss.backward()
+            # # optimizer.step()
+            # scaler.step(optimizer)
+            # scaler.update()
+
         accuracy = count_right / count_tot
         print('total train_loss = %.5f' % float(trainLossTotal))
         print('train epoch:', epoch, ': ', accuracy)
@@ -161,31 +196,67 @@ if __name__ == '__main__':
         # scheduler.step(accuracy)
         # torch.save(model.state_dict(), "model/concat11/params" + str(epoch) + ".pkl")
         # 测试
-        count_right = 0
-        count_tot = 0
-        testLossTotal = 0
-        # label_list = []
-        # predict_list = []
-        for i, data in enumerate(testLoader, 0):
-            img, label = data  # label 需要改成 0，1，2，3，4 的形式 4表示其他
-            img, label = Variable(img).float().cuda(), Variable(label).long().cuda()
-            label[label==2] = 0 #后续只标注0类别
-            img = img / 255.0
-            img -= mean
-            img /= std
-            img = img.permute(0, 3, 1, 2)
-            with torch.no_grad():
-                predict = model(img)  # B*CLASS_NUM*H*W
-            losses = criterion(predict, label)
-            torch.unsqueeze(losses, 0)
-            loss = losses.mean()
-            predictIndex = torch.argmax(predict[0], dim=1)  # 计算一下准确率和召回率 B*H*W 和label1一样
-            count_right += torch.sum(predictIndex == label).item()
-            # count_right += torch.sum((predictIndex == label) & (label != 0)).item()
-            count_tot += torch.sum(label != -1).item()
-            testLossTotal += loss.item()
-        print('test epoch:', epoch, ': ', count_right / count_tot)
-        print('total test_loss = %.5f' % float(testLossTotal))
+        # count_right = 0
+        # count_tot = 0
+        # testLossTotal = 0
+        # # label_list = []
+        # # predict_list = []
+        # for i, data in enumerate(testLoader, 0):
+        #     img, label = data
+        #     label = label[:, 5:-5, 5:-5]
+        #     # img, label = torch.tensor(img).float().cuda(), torch.tensor(label).float().cuda()
+        #     img, label = Variable(img).float().cuda(), Variable(label).float().cuda()
+        #     # tmp = torch.Tensor(img).to(mDevice)
+        #     label1 = label.clone()  # label要先扩充批量维度 B*H*W,不用扩充，本来就是Batch
+        #     label2 = torch.stack([label, label, label, label], 3)
+        #     label2 = label2.permute(0, 3, 1, 2)  # B*C*H*W,
+        #
+        #     mask = torch.zeros(label.size()).to(mDevice)  # B*H*W
+        #     label = torch.where(label == 4, mask, label)  # 第四类位置标0，0就代表其他类别 ，网络预测出0就表示其他类别
+        #     label = label.long()  # index类型需转为整型
+        #     one_hot = torch.nn.functional.one_hot(label, 4)  # 4分类
+        #     one_hot = one_hot.float()
+        #
+        #     # print('type:',type(one_hot))
+        #     # print('one_hot:',one_hot.size())
+        #     one_hot = one_hot.permute(0, 3, 1, 2)  # B * C * H * W,
+        #
+        #     # print('one_hot:',one_hot.size())
+        #     img = img.permute(0, 3, 1, 2)
+        #     with torch.no_grad():
+        #         predict = model(img)  # 只预测前三个通道
+        #         # predict=model(img)
+        #         predictIndex = torch.argmax(predict, dim=1)  # 计算一下准确率和召回率
+        #         label1[label1 == 0] = 255  # 255表示无标签位置
+        #         label1[label1 == 4] = 0  # 0表示其他类别位置
+        #         label1 = label1.long()
+        #
+        #         count_right += torch.sum((predictIndex == label1) & (label1 != 255)).item()
+        #         count_tot += torch.sum(label1 != 255).item()
+        #
+        #         # predictIndex = predictIndex.cpu().detach().numpy()
+        #         # label1 = label1.cpu().detach().numpy()
+        #
+        #         # label_list.append(label1)
+        #         # predict_list.append(predictIndex)
+        #
+        #
+        #
+        #         predict = torch.where(label2 == 0, one_hot, predict)
+        #         loss = criterion(predict, one_hot)
+        #         # loss = calc_loss(predict, one_hot)
+        #         testLossTotal += loss.item()
+
+            # testTotal += label.size(0)
+            # predict = model(img)
+            #
+            # predict = torch.squeeze(predict)
+            # # 计算正确率
+            # predictIndex = torch.argmax(predict, dim=1)
+            # labelIndex = torch.argmax(label, dim=1)
+            # testCorrect += (predictIndex == labelIndex).sum()
+        # print('test epoch:', epoch, ': ', count_right / count_tot)
+        # print('total test_loss = %.5f' % float(testLossTotal))
         # label_list = np.array(label_list).flatten()
         # predict_list = np.array(predict_list).flatten()
         # ind = (label_list != 255)

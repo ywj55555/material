@@ -181,6 +181,9 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
     if dataType == 'sea':
         labelpath = waterLabelPath
         imgpath = waterImgRootPath
+    elif dataType == 'bmhWater':
+        labelpath = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
+        imgpath = '/home/cjl/dataset_18ch/waterBmh/'
     elif dataType =='RiverSkinDetection1':
         labelpath = skinAndWaterLabelPath
         imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
@@ -203,11 +206,16 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
         # imgData = envi_loader(os.path.join(env_data_dir,file[:8])+'/', file,nora)
         # 读取img文件
         imgData = None
-        if os.path.exists(imgpath + file[3:] + '.img'):
-            imgData = envi_loader(imgpath, file[3:], bands, False)
+        if dataType == 'bmhWater':
+            cut_num = 10
+            imgData = raw_loader(imgpath, file, cut_num=cut_num)
+            imgLabel = imgLabel[cut_num:-cut_num,cut_num:-cut_num]
         else:
-            print(file, 'not found!!!')
-            continue
+            if os.path.exists(imgpath + file[3:] + '.img'):
+                imgData = envi_loader(imgpath, file[3:], bands, False)
+            else:
+                print(file, 'not found!!!')
+                continue
         # t3 = time.time()
         # 没必要 特征变换 增加之前设计的斜率特征
         # H W 22
@@ -288,6 +296,8 @@ def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, act
     all_process_label = []
     if dataType == 'sea':
         dataFile = SeaFile
+    elif dataType == 'bmhWater':
+        dataFile = bmhTrain
     elif dataType == 'RiverSkinDetection1':
         dataFile = RiverSkinDetection1
     elif dataType == 'RiverSkinDetection2':
@@ -439,7 +449,7 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
     # 去掉过曝区域
     print("move overexposure area....")
     max_mask = np.max(imgData, axis=2)
-    imgLabel[max_mask > overexposure_thre] = 0
+    imgLabel[max_mask > overexposure_thre] = 255  # 不参与训练
     img = imgData.transpose(2, 0, 1)
     del max_mask
     gc.collect()

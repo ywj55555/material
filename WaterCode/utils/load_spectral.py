@@ -4,15 +4,35 @@ warnings.filterwarnings("ignore")
 import spectral.io.envi as envi
 import time
 import gc
-from utils.os_helper import judegHdrDataType
-# waveLength = [499.8, 514.8, 562.6, 583.8, 642.3, 702.9, 803.2, 678.0, 724.2, 837.8, 882.4]
-# # band = [28, 35, 54, 61, 77, 90, 107, 85, 94, 112, 118]
-# # band = [23, 49, 57, 63, 82, 90, 103, 109, 116]
-# bandWaveLength = [450, 515, 560, 580, 640, 659, 680, 700, 725, 777, 800]
-# band = [2,36,54,61,77,82,87,91,95,104,108]
-# band = [x - 1 for x in band]
-ALL_BAND_NUM = 128
+
+waveLength = [499.8, 514.8, 562.6, 583.8, 642.3, 702.9, 803.2, 678.0, 724.2, 837.8, 882.4]
+# band = [28, 35, 54, 61, 77, 90, 107, 85, 94, 112, 118]
+# band = [23, 49, 57, 63, 82, 90, 103, 109, 116]
+bandWaveLength = [450, 515, 560, 580, 640, 659, 680, 700, 725, 777, 800]
+band = [2,36,54,61,77,82,87,91,95,104,108]
+band = [x - 1 for x in band]
+bandNums = len(band)
 # band = band - 1
+
+def judegHdrDataType(hdr_dirpath, file):
+    with open(hdr_dirpath +"/"+ file + '.hdr', "r") as f:
+        data = f.readlines()
+    modify_flag = False
+    if data[5] != 'data type = 12\n':
+        data[5] = 'data type = 12\n'
+        modify_flag = True
+        # raise HdrDataTypeError("data type = 2, but data type should be 12")
+    if data[6].split(' =')[0] != 'byte order':
+        data.insert(6,'byte order = 0\n')
+        modify_flag = True
+    else:
+        if data[6] != 'byte order = 0\n':
+            data[6] ='byte order = 0\n'
+            modify_flag = True
+    if modify_flag:
+        with open(hdr_dirpath + "/" + file + '.hdr', "w") as f:
+            f.writelines(data)
+        print("mend the datatype of file : ", file)
 
 def Sigmoid(x,gama = 0.1):
     x = (1/(1+(np.exp(-1 * x * gama))) - 0.5) * 2
@@ -26,7 +46,7 @@ def Exp(x,gama = 0.1):
     x = 1 - (np.exp(-1 * x * gama))
     return x
 
-def envi_loader(dirpath, filename, bands, norma=True):
+def envi_loader(dirpath, filename,norma=True):
     # Test(/s)
     # load: 2.107914924621582
     # cut: 0.5144715309143066
@@ -39,10 +59,10 @@ def envi_loader(dirpath, filename, bands, norma=True):
     # imgData = np.stack([imgData[:, :, band[0]], imgData[:, :, band[1]], imgData[:, :, band[2]], imgData[:, :, band[3]], \
     #                     imgData[:, :, band[4]], imgData[:, :, band[5]], imgData[:, :, band[6]], imgData[:, :, band[7]], \
     #                     imgData[:, :, band[8]]], axis=2)
-    if len(bands) != ALL_BAND_NUM:
-        # bandNums = len(bands)
-        # imgData = np.stack([imgData[:, :, bands[x]] for x in range(bandNums)], axis=2)
-        imgData = imgData[:, :, bands]
+
+    ###imgData = np.stack([imgData[:, :, band[x]] for x in range(bandNums)], axis=2)
+#######
+    # imgData = imgData[:, :, band]
     # tt = time.time()
     if norma:
         imgData = envi_normalize(imgData)
@@ -50,32 +70,13 @@ def envi_loader(dirpath, filename, bands, norma=True):
     return imgData
 
 
-def raw_loader(dirpath, filename, nora=True, cut_num=10):
-
-    # enviData = envi.open(dirpath + filename + '.hdr', dirpath + filename + '.img')
-    raw_data = np.fromfile(dirpath + filename+'.raw', dtype=np.float32)
-    raw_data = raw_data.reshape(18, 1020, 1020)
-    imgData = raw_data.transpose(1, 2, 0)
-    # 异常值处理
-    imgData[np.isnan(imgData)] = 1
-    imgData = imgData[cut_num:-cut_num,cut_num:-cut_num,:]
-    imgData[np.where(imgData <=0)] = 1
-    # else:
-    #     imgData = np.stack(
-    #         [imgData[:, :, i] for i in range(18)], axis=2)
-    if nora:
-        imgData = envi_normalize(imgData)
-    gc.collect()
-    return imgData
-
 def envi_normalize(imgData):
-    img_max =np.max(imgData, axis=2 ,keepdims = True)
-    return imgData / (img_max+0.0001)
+    # img_max =np.max(imgData, axis=2 ,keepdims = True)
+    img_max =np.max(imgData,keepdims = True)
+    # img_max = 1000
+    return imgData / 65535#(img_max+0.0001)
     # return imgData / img_max.reshape(imgData.shape[0], imgData.shape[1], 1)
 
-def envi_wholeMaxnormalize(imgData):
-    img_max =np.max(imgData)
-    return imgData / (img_max+0.0001)
 
 def transform(data, typeCode):
     row, col, channels = data.shape
@@ -111,6 +112,7 @@ def transform(data, typeCode):
     else:
         return data
 
+
 def transform2(data):
     row, col, channels = data.shape
     # skin
@@ -139,7 +141,7 @@ def transform2(data):
     res[:, :, 19] = data[:, :, 4] / data[:, :, 2]
     return res
 
-def kindsOfFeatureTransformation(imgData, nora = True, eps = 0.001):
+def kindsOfFeatureTransformation(imgData, nora = True, eps = 0.001,activate = Sigmoid):
     # 传入的imgData 不要归一化
     # H W C(11)
     # row, col, channels = imgData.shape
@@ -158,116 +160,11 @@ def kindsOfFeatureTransformation(imgData, nora = True, eps = 0.001):
     pillars_band2 = 9
     pillars_feature1 = imgData[:, :, pillars_band1]
     pillars_feature2 = imgData[:, :, pillars_band2]
-    # pillars_feature = pillars_feature1 / (pillars_feature2 + eps)
-    pillars_feature = (pillars_feature1 - pillars_feature2) / (pillars_feature1 + pillars_feature2 + eps)
-    featureList.append(pillars_feature)
-
-    bottle_band1 = 9
-    bottle_band2 = 3
-    bottle_feature1 = imgData[:, :, bottle_band1]
-    bottle_feature2 = imgData[:, :, bottle_band2]
-    # bottle_feature = bottle_feature1 / (bottle_feature2 + eps)
-    bottle_feature = (bottle_feature1 - bottle_feature2) / (bottle_feature1 + bottle_feature2 + eps)
-    featureList.append(bottle_feature)
-
-    # draft
-    draft_band1 = 5
-    draft_band2 = 9
-    # daytime
-    draft_feature1 = imgData[:, :, draft_band1]
-    draft_feature2 = imgData[:, :, draft_band2]
-    # draft_cal_feature1 = draft_feature2 /(draft_feature1 + eps)
-    draft_cal_feature1 = (draft_feature2 - draft_feature1) / (draft_feature1 + draft_feature2 + eps)
-    featureList.append(draft_cal_feature1)
-
-    # bandWaveLength = [450, 515, 560, 580, 640, 659, 680, 700, 725, 777, 800]
-    # band = [2, 36, 54, 61, 77, 82, 87, 91, 95, 104, 108]
-    # order =[0, 1,  2   3    4   5   6   7   8    9   10]
-    # finger
-    finger_band1 = 0
-    finger_band2 = 3
-    finger_band3 = 7
-    finger_feature1 = imgData[:, :, finger_band1]
-    finger_feature2 = imgData[:, :, finger_band2]
-    finger_feature3 = imgData[:, :, finger_band3]
-    # finger_cal_feature1 = finger_feature2 / (finger_feature1 + eps)
-    # finger_cal_feature2 = finger_feature3 / (finger_feature2 + eps)
-    finger_cal_feature1 = (finger_feature2 - finger_feature1) / (finger_feature2 + finger_feature1 + eps)
-    finger_cal_feature2 = (finger_feature3 - finger_feature2) / (finger_feature3 + finger_feature2 + eps)
-    featureList.append(finger_cal_feature1)
-    featureList.append(finger_cal_feature2)
-
-    # grass and tree
-    plant_band1 = 5
-    plant_band2 = 7
-    plant_band3 = 7
-    tree_band1 = 2
-    tree_band2 = 3
-    tree_band3 = 9
-    tree_band4 = 10
-    skin_band1 = 0
-    black_tree_feature1 = imgData[:, :, tree_band3]
-    black_tree_feature2 = imgData[:, :, tree_band4]
-    # black_tree_feature = black_tree_feature2 / (black_tree_feature1 + eps)
-    black_tree_feature = (black_tree_feature2 - black_tree_feature1) / (black_tree_feature2 + black_tree_feature1 + eps)
-    featureList.append(black_tree_feature)
-
-    plant_feature1 = imgData[:, :, plant_band1]
-    plant_feature2 = imgData[:, :, plant_band2]
-    plant_feature3 = imgData[:, :, plant_band3]
-    tree_feature1 = imgData[:, :, tree_band1]
-    tree_feature2 = imgData[:, :, tree_band2]
-
-    # plant_feature = plant_feature2 / (plant_feature1 + eps)
-    plant_feature = (plant_feature2 - plant_feature1) / (plant_feature2 + plant_feature1 + eps)
-    # tree_feature = tree_feature2 / (tree_feature1 + eps)
-    tree_feature = (tree_feature2 - tree_feature1) / (tree_feature2 + tree_feature1 + eps)
-    # cloth_feature = plant_feature1
-    # plant_feature9 = plant_feature1 / (plant_feature3 + eps)
-    plant_feature9 = (plant_feature1 - plant_feature3) / (plant_feature1 + plant_feature3 + eps)
-
-    featureList.append(plant_feature)
-    featureList.append(tree_feature)
-    # featureList.append(cloth_feature)
-    featureList.append(plant_feature9)
-    featureImgData = np.stack(featureList, axis = 2)
-######全正值
-    featureImgData = featureImgData / 2 + 0.5
-######
-    if nora:
-        print("normalizing......")
-
-        imgData = envi_normalize(imgData)
-        # featureImgData = envi_normalize(featureImgData)
-
-    fusionData = np.concatenate([imgData, featureImgData], axis = 2)
-
-    return fusionData
-
-# 三个 2500 随机 小模型 sig 和 tanh 波段平移以后的
-def kindsOfFeatureTransformation_slope(imgData,  activate, nora = True, eps = 0.001):
-    # 传入的imgData 不要归一化
-    # H W C(11)
-    # row, col, channels = imgData.shape
-    # bandWaveLength = [450, 515, 560, 580, 640, 659, 680, 700, 725, 777, 800]
-    # band = [2, 36, 54, 61, 77, 82, 87, 91, 95, 104, 108] #原来128
-    # order = [0, 1,  2   3    4   5   6   7   8    9   10] #抽取的11个波段
-    featureList = []
-    # ndwi
-    greenBand = imgData[:, :, 2]
-    nir_band = imgData[:, :, 10]
-    # H W
-    NDWI = (greenBand - nir_band) / (greenBand + nir_band + eps)
-    featureList.append(NDWI)
-    pillars_band1 = 7
-    pillars_band2 = 9
-    pillars_feature1 = imgData[:, :, pillars_band1]
-    pillars_feature2 = imgData[:, :, pillars_band2]
     pillars_feature = pillars_feature1 / (pillars_feature2 + eps)
-    # if activate == ''
     pillars_feature = activate(pillars_feature)
     # pillars_feature = (pillars_feature1 - pillars_feature2) / (pillars_feature1 + pillars_feature2 + eps)
     featureList.append(pillars_feature)
+
     bottle_band1 = 9
     bottle_band2 = 3
     bottle_feature1 = imgData[:, :, bottle_band1]
@@ -276,13 +173,14 @@ def kindsOfFeatureTransformation_slope(imgData,  activate, nora = True, eps = 0.
     bottle_feature = activate(bottle_feature)
     # bottle_feature = (bottle_feature1 - bottle_feature2) / (bottle_feature1 + bottle_feature2 + eps)
     featureList.append(bottle_feature)
+
     # draft
     draft_band1 = 5
     draft_band2 = 9
     # daytime
     draft_feature1 = imgData[:, :, draft_band1]
     draft_feature2 = imgData[:, :, draft_band2]
-    draft_cal_feature1 = draft_feature2 / (draft_feature1 + eps)
+    draft_cal_feature1 = draft_feature2 /(draft_feature1 + eps)
     draft_cal_feature1 = activate(draft_cal_feature1)
     # draft_cal_feature1 = (draft_feature2 - draft_feature1) / (draft_feature1 + draft_feature2 + eps)
     featureList.append(draft_cal_feature1)
@@ -343,17 +241,17 @@ def kindsOfFeatureTransformation_slope(imgData,  activate, nora = True, eps = 0.
     featureList.append(tree_feature)
     # featureList.append(cloth_feature)
     featureList.append(plant_feature9)
-    featureImgData = np.stack(featureList, axis=2)
-    ######全正值
+    featureImgData = np.stack(featureList, axis = 2)
+######全正值
     # featureImgData = featureImgData / 2 + 0.5
-    ######
+######
     if nora:
         print("normalizing......")
 
         imgData = envi_normalize(imgData)
         # featureImgData = envi_normalize(featureImgData)
 
-    fusionData = np.concatenate([imgData, featureImgData], axis=2)
+    fusionData = np.concatenate([imgData, featureImgData], axis = 2)
 
     return fusionData
 

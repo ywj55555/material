@@ -1,7 +1,5 @@
 import os
-import sys
-sys.path.append('../')
-from data.dictNew import *
+# from data.dictNew import *
 import random
 
 # all_list = trainFile
@@ -20,29 +18,28 @@ for i in range(len(filelist)):
 trainf.close()
 '''
 
-tainpath = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
+tainpath = r'D:/dataset/lgimg/test/'
 trainFile = os.listdir(tainpath)
-test_list = random.sample(trainFile, int(len(trainFile)*0.3))
+# test_list = random.sample(trainFile,int(len(trainFile)*0.2))
 
-train_file = './all_train_file.txt'
-test_file = './test_file.txt'
+train_file = './water_test_file.txt'
+# test_file = './test_file.txt'
 
 trainf = open(train_file,'w')
-testf = open(test_file,'w')
-# trainfile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
+# testf = open(test_file,'w')
 
 for file in trainFile:
-    if file[-4:] != '.png':
+    if file[-4:] != '.img':
         continue
-    if file in test_list:
-        testf.write('\''+file[:-4]+'\','+'\n')
-    else:
-        trainf.write('\'' + file[:-4] + '\',' + '\n')
+    # if file in test_list:
+    #     testf.write('\''+file[:-4]+'\','+'\n')
+    # else:
+    trainf.write('\'' + 'rgb' + file[:-4] + '\',' + '\n')
 
 # os.close(trainf)
 # os.close(testf)
 trainf.close()
-testf.close()
+# testf.close()
 
 
 

@@ -27,13 +27,19 @@ waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 labelpath = 'D:/ZY2006224YWJ/spectraldata/trainLabel/'
 
 imgpath = '/home/cjl/ssd/dataset/HIK/shuichi/img/'
+
+bmh_label = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
+bmh_png_path = '/home/cjl/dataset_18ch/waterBmh/'
+bmh_raw_path = '/home/cjl/dataset_18ch/waterBmh/'
+cut_num = 10
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
 # waterImgRootPathList = ['vedio1', 'vedio2', 'vedio3', 'vedio4', 'vedio5', 'vedio6', 'vedio7']
 # waterImgRootPathList = ['train']#test
 # select_bands = [2,36,54,61,77,82,87,91,95,104,108]
 # select_bands = [x + 5 for x in  select_bands]
-select_bands = [22, 38, 57, 68, 77, 86, 90, 100, 105, 112, 115, 123]
+# select_bands = [22, 38, 57, 68, 77, 86, 90, 100, 105, 112, 115, 123]
+select_bands = [7, 17]
 # select_bands = [x for x in range(128)]
 # imgpath
 # label_data_dir = '/home/cjl/dataset/label/'
@@ -45,16 +51,16 @@ png_path = '/home/cjl/ssd/dataset/HIK/shuichi/rgb/'
 class_nums = 2
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = "/home/cjl/ssd/ywj/material/small_4_0.001_True_True_False_sig/"
+model_path = "/home/cjl/ywj_code/materialCode/model/small_2_64_0.001_True_True/"
 LEN = 5
 featureTrans = False
 if featureTrans:
     inputBands = 21
 else:
     inputBands = len(select_bands)
-
+inputBands = 2
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [18, 25]]
+epoch_list = [str(x) for x in [26, 20, 15]]
 # epoch_list = [str(x) for x in []]
 # epoch_list = [str(x) for x in [299]]
 
@@ -89,11 +95,11 @@ for epoch in epoch_list:
     count_right = 0
     count_tot = 0
     # result_dir = './resTrain/' + model_path[2:] + epoch + '/'
-    result_dir = './resTrain/draft/' + epoch + '/'
+    result_dir = './resTest/smallModel_twoBands' + epoch + '/'
     # result_dir_label = './res/'+ epoch + '/'
     # file_list = Shenzhen_test
     # file_list = waterFile
-    file_list = hk_shuichi
+    file_list = bmhTest
 
     # file_list = [x for x in file_list]
     print("the number of test file:",len(file_list))
@@ -118,10 +124,15 @@ for epoch in epoch_list:
     for i in range(cnt):
         file_tmp = file_list[i*test_batch:(i+1)*test_batch if (i+1)<cnt else len(file_list)]
         imgData = []
+        labelData = []
         for filename in file_tmp:
             imgData_tmp = None
-            if os.path.exists(imgpath + filename[3:] + '.img'):
-                imgData_tmp = envi_loader(imgpath, filename[3:], select_bands, False)
+            if os.path.exists(bmh_raw_path + filename + '.raw'):
+                imgData_tmp = raw_loader(bmh_raw_path, filename, cut_num=cut_num)
+                imgLabel_tmp = io.imread(bmh_label + filename + '.png')
+                imgLabel_tmp = imgLabel_tmp[cut_num:-cut_num, cut_num:-cut_num]
+                imgLabel_tmp = imgLabel_tmp[5:-5, 5:-5]
+                # imgData_tmp = envi_loader(imgpath, filename[3:], select_bands, False)
             else:
                 print("Not Found ", filename)
                 continue
@@ -134,8 +145,13 @@ for epoch in epoch_list:
             # envi_loader(imgpath, file[3:], nora)
             # imgData_tmp = transform2(imgData_tmp)
             imgData.append(imgData_tmp)
+            labelData.append(imgLabel_tmp)
         imgData = np.array(imgData)
         inputData = torch.tensor(imgData).float().cuda()
+        labelData = np.array(labelData)
+        labelData = labelData.astype(np.uint8)
+        labelData = torch.tensor(labelData).long().cuda()
+        # labelData = labelData[5 : -5, 5 : -5]
         #print(filename)
         # imgData = envi_loader(env_data_dir, filename)
         # imgData = transform2(imgData)
@@ -163,9 +179,10 @@ for epoch in epoch_list:
             except Exception as info:
                 print(info)
                 continue
-            print(inputData.shape)
-            inputData = inputData / torch.max(inputData, dim=1, keepdim=True)[0]
+            # print(inputData.shape)
+            # inputData = inputData / torch.max(inputData, dim=1, keepdim=True)[0]
             start = time.time()
+            inputData = inputData[:, select_bands, :, :]
             predict = model(inputData)
             del inputData
             torch.cuda.empty_cache()
@@ -175,7 +192,11 @@ for epoch in epoch_list:
             # torch.cuda.empty_cache()
             # predict = torch.squeeze(predict)
             predict_ind = torch.argmax(predict, dim=1)
+            count_right += torch.sum(predict_ind == labelData).item()  # 全部训练
+            # count_right += torch.sum((predictIndex == label) & (label != 0)).item()
+            count_tot += torch.sum(labelData != -1).item()
             predict_ind = predict_ind.cpu().detach().numpy()
+
             end = time.time()
             print("average cost time : ", (end - start) / predict_ind.shape[0])
         #print(np.unique(predict_ind))
@@ -184,12 +205,13 @@ for epoch in epoch_list:
         #     rows, cols = predict_ind.shape
             png_num = predict_ind.shape[0]
             for png_i in range(png_num):
-                png_path_single = png_path + file_tmp[png_i] + '.png'
-                print(png_path_single)
+                png_path_single = bmh_png_path + file_tmp[png_i] + '.png'
+                # print(png_path_single)
                 if not os.path.exists(png_path_single):
                     continue
-                imgGt = cv2.imread(png_path +  file_tmp[png_i] + '.png')
-                imgGt = imgGt[5:-5,5:-5]
+                imgGt = cv2.imread(bmh_png_path +  file_tmp[png_i] + '.png')
+                imgGt = imgGt[cut_num:-cut_num, cut_num:-cut_num,:]
+                imgGt = imgGt[5:-5, 5:-5]
 
                 imgRes = imgGt
                 for color_num in range(1,class_nums):
@@ -198,9 +220,11 @@ for epoch in epoch_list:
                 # imgRes[predict_ind == 1, 2] = 255
                 # imgRes[predict_ind == 2, 0] = 255
                 # imgRes[predict_ind == 3, 1] = 255
-                print(result_dir + file_tmp[png_i] + '.png')
+                # print(result_dir + file_tmp[png_i] + '.png')
                 cv2.imwrite(result_dir + file_tmp[png_i] + '.png', imgRes)
         gc.collect()
+    accuracy = count_right / count_tot
+    print('epoch ' + epoch + ' accuracy: ', accuracy)
 
                 # cv2.imwrite(result_dir_label + file_tmp[png_i] + '.png', predict_ind[png_i])
 

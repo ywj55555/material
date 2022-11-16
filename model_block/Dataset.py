@@ -165,6 +165,7 @@ class Dataset_RGB(torch.utils.data.Dataset):
         imgLabel = io.imread(self.label_path + self.Data[index] + '.png')
         imgData = cv2.imread(self.png_path + self.Data[index] + '.png')  # 加载模式为 BGR
         imgData = imgData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+        imgLabel = imgLabel.astype(np.uint8)
         # 下面这些步骤记得在 训练的时候 实现
         # imgData = imgData / 255.0
         # imgData -= mean

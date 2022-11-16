@@ -20,6 +20,7 @@ print('mBatchSize',mBatchSize)
 print('mEpochs',mEpochs)
 print('mLearningRate',mLearningRate)
 print('model_select',model_select)
+model_select = 1
 print('nora',nora)
 # model_path = ['./IntervalSampleWaterModel/','./newSampleWaterModel/','./IntervalSampleBigWaterModel/']
 model_size = ["small", "big"]
@@ -29,12 +30,13 @@ featureTrans = args.featureTrans#False#
 # model_save = './IntervalSampleAddFeatureWaterModel_shenzhen2/'
 # dataTypelist = ['water', 'water','water']
 # dataType = dataTypelist[model_select-1]
-dataType = 'sea'
-print('featureTrans',featureTrans)
+dataType = 'bmhWater'
+print('featureTrans', featureTrans)
 # select_bands = [2,36,54,61,77,82,87,91,95,104,108]
 # select_bands = [x + 5 for x in  select_bands]
 
-select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
+# select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
+select_bands = [7, 17]
 # 最后一个epoch 选取结果 --》 109  98  81 116 125  90 112 127 108 118 100 123
 # 116 125 109 100 108  53  98  90  81 127 123  19
 # hashBand = hash(select_bands)
@@ -53,7 +55,7 @@ if bands_num != 128:
     bands_str = "_".join(bands_str)
 else:
     bands_str = "128bands"
-
+bands_num = 2
 intervalSelect = args.intervalSelect
 print('intervalSelect :', intervalSelect)
 activa = args.activa
@@ -65,8 +67,8 @@ if activa == 'sig':
 else:
     activate = Tanh
 
-model_save = "./" + model_size[model_select - 1] + "_" + str(mBatchSize) + "_" + str(mLearningRate) + "_" + str(intervalSelect) + "_" + str(nora) + \
-             "_" + str(featureTrans) + "_" + activa + "/"
+model_save = "./model/" + model_size[model_select - 1] + "_" + str(bands_num) + "_" + str(mBatchSize) + "_" + str(mLearningRate) + "_" + str(intervalSelect) + "_" + str(nora) + \
+              "/"
 
 mkdir(model_save)
 # 学习率 batchsize 损失函数 优化器 增大模型
@@ -95,7 +97,7 @@ if __name__ == '__main__':
     # save_trainData_npy_path = './trainData/' + model_save[2:-1] + str(len(select_bands)) + '_mulprocess.npy'
     save_npy_path = './trainData/'
     mkdir(save_npy_path)
-    save_trainData_npy_path = save_npy_path + bands_str + str(intervalSelect) + "_"  + str(featureTrans) + "_" + activa + '_mulprocess.npy'
+    save_trainData_npy_path = save_npy_path + str(intervalSelect) + "_" + str(featureTrans) + "_" + activa + '_mulprocess.npy'
     # save_trainData_npy_path = './trainData/big_32_0.001_Falsemulprocess1.npy'
     print(save_trainData_npy_path)
     # multiProcessGenerateData(dataType, num, length, nora=True, class_nums=2, intervalSelect=True, featureTrans=True)
@@ -135,6 +137,7 @@ if __name__ == '__main__':
         trainLabel = np.load(save_trainData_npy_path[:-4] + '_label.npy')
         print("train data exist!!!")
     print("begin!!!")
+    trainData = trainData[:, select_bands, :, :]
     print("trainData shape : ", trainData.shape)
     print("trainLabel shape : ", trainLabel.shape)
     trainDataset = MyDataset(trainData, trainLabel)
