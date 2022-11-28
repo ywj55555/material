@@ -58,7 +58,8 @@ def raw_loader(dirpath, filename, nora=True, cut_num=10):
     imgData = raw_data.transpose(1, 2, 0)
     # 异常值处理
     imgData[np.isnan(imgData)] = 1
-    imgData = imgData[cut_num:-cut_num,cut_num:-cut_num,:]
+    if cut_num != 0:
+        imgData = imgData[cut_num:-cut_num,cut_num:-cut_num,:]
     imgData[np.where(imgData <=0)] = 1
     # else:
     #     imgData = np.stack(

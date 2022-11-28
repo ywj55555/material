@@ -39,21 +39,24 @@ hz_png_path = '/home/cjl/ssd/dataset/hangzhou/rgb/'
 bmh_label = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
 bmh_png_path = '/home/cjl/dataset_18ch/waterBmh/'
 bmh_raw_path = '/home/cjl/dataset_18ch/waterBmh/'
+skinCloth_raw_path = '/home/cjl/dataset_18ch/raw_data/'
+skinCloth_raw_test_path = '/home/cjl/dataset_18ch/test_raw_data/'
+skinCloth_label = '/home/cjl/dataset_18ch/label/'
 # bmh_png_path =
 select_train_bands = [114, 109, 125,  53, 108,  81, 100, 112,  25,  90,  96, 123 ]
 input_bands_nums = len(select_train_bands)
 nora = True
 featureTrans = False
-class_num = 2
+class_num = 3
 # 这个参数最好大一些！！！
 min_kept = args.min_kept
 OhemCrossEntropy_thres = 0.9
-num_classes = 2
-input_channel = 3
+num_classes = 3
+input_channel = 3 # skin cloth other
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
 
-model_path = './PPLiteSeg_BmhRgb' + str(min_kept) + '_' + str(mLearningRate) + '_' + str(mtrainBatchSize) + '/'
+model_path = './model/PPLiteSeg_sinkCloth' + str(min_kept) + '_' + str(mLearningRate) + '_' + str(mtrainBatchSize) + '/'
 
 print('mBatchSize',mtrainBatchSize)
 print('mEpochs',mEpochs)
@@ -84,11 +87,11 @@ if __name__ == '__main__':
     torch.backends.cudnn.enabled = True
     mkdir(model_path)
 
-    trainDataset = Dataset_RGB(bmhTrain, bmh_png_path, bmh_label)
-    testDataset = Dataset_RGB(bmhTest, bmh_png_path, bmh_label)
+    trainDataset = Dataset_RGB(skinClothTrainFile, skinCloth_raw_path, skinCloth_label)
+    testDataset = Dataset_RGB(skinClothTestFile, skinCloth_raw_path, skinCloth_label)
     trainLoader = DataLoader(dataset=trainDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
     testLoader = DataLoader(dataset=testDataset, batch_size=mtrainBatchSize, shuffle=True, drop_last=True)
-    model = PPLiteSeg(num_classes=num_classes, input_channel=input_channel).cuda()
+    model = PPLiteSeg(num_classes = num_classes, input_channel=input_channel).cuda()
     # model = MaterialSubModel(in_channels=input_bands_nums, out_channels=class_num).cuda()
     # model.load_state_dict(torch.load(r"/home/cjl/ywj_code/code/Multi-category_all/model_ori/4.pkl"))
     # criterion=nn.MSELoss()
@@ -123,6 +126,9 @@ if __name__ == '__main__':
             img -= mean
             img /= std
             img = img.permute(0, 3, 1, 2)
+            # 其他类别映射成0
+            pos_mask = (label != 1) & (label != 2)
+            label[pos_mask] = 0
             with autocast():
                 predict = model(img)  # B*CLASS_NUM*H*W
             losses = criterion(predict, label)
@@ -174,6 +180,8 @@ if __name__ == '__main__':
             img -= mean
             img /= std
             img = img.permute(0, 3, 1, 2)
+            pos_mask = (label != 1) & (label != 2)
+            label[pos_mask] = 0
             with torch.no_grad():
                 predict = model(img)  # B*CLASS_NUM*H*W
             losses = criterion(predict, label)

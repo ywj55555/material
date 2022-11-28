@@ -177,6 +177,8 @@ class Dataset_RGB(torch.utils.data.Dataset):
         # #  image = image.permute((2, 0, 1))
         #
         # image = image.unsqueeze(0)
+        # print(index, "imgLabel : ", imgLabel.shape)
+        # print(index, "imgData", imgData.shape)
         return imgData.copy(), imgLabel
     def __len__(self):
         return len(self.Data)

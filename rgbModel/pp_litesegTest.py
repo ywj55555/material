@@ -48,12 +48,16 @@ bmh_label = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
 bmh_png_path = '/home/cjl/dataset_18ch/waterBmh/'
 bmh_raw_path = '/home/cjl/dataset_18ch/waterBmh/'
 
+skinCloth_raw_path = '/home/cjl/dataset_18ch/raw_data/'
+skinCloth_raw_test_path = '/home/cjl/dataset_18ch/test_raw_data/'
+skinCloth_label = '/home/cjl/dataset_18ch/label/'
+
 # csv2_save_path = log+'class4_allFile500_acc.csv'
 # model_dict = {1:'ori_model_hz',2:'ori_model_hz'}
-class_nums = 2
+class_nums = 3
 # model_path = "./IntervalSampleAddFeatureWaterModel_shenzhen/"
 # model_path = "./small_32_0.001_True_True_False_sig/"
-model_path = './PPLiteSeg_BmhRgb500000_0.001_16/'
+model_path = './model/PPLiteSeg_sinkCloth500000_0.001_16/'
 LEN = 5
 featureTrans = False
 if featureTrans:
@@ -62,12 +66,12 @@ else:
     inputBands = len(select_train_bands)
 
 color_class = [[0,0,255],[255,0,0],[0,255,0]]
-epoch_list = [str(x) for x in [5, 10, 15, 20]]
+epoch_list = [str(x) for x in [98, 105, 127]]
 
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
 inputBands = 3
-num_classes = 2
+num_classes = 3
 # epoch_list = [str(x) for x in []]
 # epoch_list = [str(x) for x in [299]]
 
@@ -101,11 +105,11 @@ for epoch in epoch_list:
     predict_list = []
     count_right = 0
     count_tot = 0
-    result_dir = './resTest/' + model_path[2:] + epoch + '/'
+    result_dir = './resTest/' + model_path[8:] + epoch + '_test/'
     # result_dir_label = './res/'+ epoch + '/'
     # file_list = Shenzhen_test
     # file_list = waterFile
-    file_list = bmhTest
+    file_list = skinClothTestFile
 
     # file_list = [x[3:] for x in file_list]
     print("the number of test file:",len(file_list))
@@ -131,8 +135,8 @@ for epoch in epoch_list:
         file_tmp = file_list[i*test_batch:(i+1)*test_batch if (i+1)<cnt else len(file_list)]
         imgData = []
         for filename in file_tmp:
-            if os.path.exists(bmh_png_path + filename + '.png'):
-                imgData_tmp = cv2.imread(bmh_png_path + filename + '.png')
+            if os.path.exists(skinCloth_raw_path + filename + '.png'):
+                imgData_tmp = cv2.imread(skinCloth_raw_path + filename + '.png')
             # elif os.path.exists(hz_png_path + filename + '.png'):
             #     imgData_tmp = cv2.imread(hz_png_path + filename + '.png')
             else:
@@ -196,15 +200,15 @@ for epoch in epoch_list:
                 # print(png_path_single)
                 # if not os.path.exists(png_path_single):
                 #     continue
-                if os.path.exists(bmh_png_path + file_tmp[png_i]  + '.png'):
-                    imgGt = cv2.imread(bmh_png_path + file_tmp[png_i]  + '.png')
+                if os.path.exists(skinCloth_raw_path + file_tmp[png_i]  + '.png'):
+                    imgGt = cv2.imread(skinCloth_raw_path + file_tmp[png_i]  + '.png')
                 else:
                     imgGt = cv2.imread(hz_png_path + file_tmp[png_i]  + '.png')
                 # imgGt = cv2.imread(png_path + file_tmp[png_i] + '.png')
                 # imgGt = imgGt[5:-5,5:-5]
 
                 imgRes = imgGt
-                for color_num in [1]:
+                for color_num in range(1, num_classes):
                     imgRes = mask_color_img(imgRes,mask=(predict_ind[png_i] == color_num),color=color_class[color_num-1],alpha=0.6 )
                 # imgRes = np.zeros((rows, cols, 3), np.uint8)
                 # imgRes[predict_ind == 1, 2] = 255

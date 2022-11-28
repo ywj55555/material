@@ -19,8 +19,10 @@ from utils.os_helper import mkdir
 #             cnt+=1
 #             break
 # print(cnt)
-path = '/home/cjl/dataset_18ch/waterBmh/getImage_data_1008/'
-dstpath = '/home/cjl/dataset_18ch/waterBmh/'
+path = '/home/cjl/dataset_18ch/test_raw_data/'
+dstpath = '/home/cjl/dataset_18ch/raw_data/'
 files = os.listdir(path)
 for file in files:
-    shutil.move(path + file, dstpath + file)
+    if not os.path.exists(dstpath + file):
+        shutil.move(path + file, dstpath + file)
+

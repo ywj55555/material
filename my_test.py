@@ -8,7 +8,34 @@ def returnint():
     a = 5
     print("hanshu : ",id(a))
     return a
+
+from utils.load_spectral import raw_loader
+from tqdm import tqdm
 if __name__ == '__main__':
+    skinCloth_raw_path = '/home/cjl/dataset_18ch/raw_data/'
+    files = os.listdir(skinCloth_raw_path)
+    for file in tqdm(files):
+        # if len(file) == len("1633939192.jpg") and file[-4:] == '.raw':
+        #     print(file)
+        #     if file[:-4] != "1633939446":
+        #         continue
+        if file[-4:] == '.raw':
+            imgData = raw_loader(skinCloth_raw_path, file[:-4], nora=False, cut_num=0)
+            # print(imgData.shape)
+            png_r = imgData[:, :, 10]
+            png_g = imgData[:, :, 7]
+            png_b = imgData[:, :, 1]
+            # print(png_b.shape)
+            png_r = cv2.normalize(png_r, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+            png_g = cv2.normalize(png_g, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+            png_b = cv2.normalize(png_b, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+            rgb_png = np.stack([png_b, png_g, png_r], axis=2)
+            cv2.imwrite(skinCloth_raw_path + file[:-4] + '.png', rgb_png)
+            # break
+
+
+
+
     # label_path = '/home/cjl/ssd/dataset/hangzhou/label/'
     # img_path = '/home/cjl/ssd/dataset/hangzhou/'
     # labellist = os.listdir(label_path)
@@ -18,9 +45,9 @@ if __name__ == '__main__':
     #         print(label)
     # a = {x : 0 for x in range(4)}
     # print(a)
-    a = np.random.randint(1,5,(4,5))
-    b = a.reshape(2,4)
-    print(b)
+    # a = np.random.randint(1,5,(4,5))
+    # b = a.reshape(2,4)
+    # print(b)
     # path1 = './trainData/big_32_0.001_Falsemulprocess_label.npy'
     # # path2 = './trainData/big_32_0.001_False.npy'
     # npy1 = np.load(path1)

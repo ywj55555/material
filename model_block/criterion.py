@@ -77,12 +77,18 @@ class OhemCrossEntropy(nn.Module):
         if ph != h or pw != w:
             score = F.interpolate(input=score, size=(
                 h, w), mode='nearest')
+        # print("score : ",score.size())
         pred = F.softmax(score, dim=1)
         pixel_losses = self.criterion(score, target).contiguous().view(-1)
         mask = target.contiguous().view(-1) != self.ignore_label
         # 下面这些主要是为了计算阈值 threshold
         tmp_target = target.clone()
         tmp_target[tmp_target == self.ignore_label] = 0
+        # print("pred: ",pred.size())
+        # # print(torch.max())
+        # print("tmp_target: ",tmp_target.size())
+        # print(torch.min(tmp_target))
+        # print(torch.max(tmp_target))
         pred = pred.gather(1, tmp_target.unsqueeze(1))
         pred, ind = pred.contiguous().view(-1,)[mask].contiguous().sort()
         # min_value = pred[min(self.min_kept, pred.numel() - 1)]

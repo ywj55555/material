@@ -36,7 +36,9 @@ print('featureTrans', featureTrans)
 # select_bands = [x + 5 for x in  select_bands]
 
 # select_bands = [116, 125, 109, 100, 108,  53,  98,  90,  81, 127, 123,  19]
-select_bands = [7, 17]
+embedding_selected_bands = [17,  8, 11, 16,  1, 12,  9, 10, 14] # 17  8 11 16  1  9 10 12 14
+embedding_selected_bands.sort()
+# select_bands = [7, 17]
 # 最后一个epoch 选取结果 --》 109  98  81 116 125  90 112 127 108 118 100 123
 # 116 125 109 100 108  53  98  90  81 127 123  19
 # hashBand = hash(select_bands)
@@ -48,14 +50,14 @@ class_nums = 2
 if featureTrans:
     bands_num = 21
 else:
-    bands_num = len(select_bands)
+    bands_num = len(embedding_selected_bands)
 
 if bands_num != 128:
-    bands_str = [str(x) for x in select_bands]
+    bands_str = [str(x) for x in embedding_selected_bands]
     bands_str = "_".join(bands_str)
 else:
     bands_str = "128bands"
-bands_num = 2
+bands_num = 9
 intervalSelect = args.intervalSelect
 print('intervalSelect :', intervalSelect)
 activa = args.activa
@@ -69,7 +71,7 @@ else:
 
 model_save = "./model/" + model_size[model_select - 1] + "_" + str(bands_num) + "_" + str(mBatchSize) + "_" + str(mLearningRate) + "_" + str(intervalSelect) + "_" + str(nora) + \
               "/"
-
+print(model_save)
 mkdir(model_save)
 # 学习率 batchsize 损失函数 优化器 增大模型
 # SGD 和 Adam 看吴恩达视频
@@ -112,7 +114,7 @@ if __name__ == '__main__':
     # sys.exit()
     if not os.path.exists(save_trainData_npy_path):
         # 数据的归一化 应该在分割完patch之后 避免以后需要不归一化的数据
-        trainData, trainLabel = multiProcessGenerateData(dataType, 2500, 11, select_bands, activate, nora=nora, class_nums=class_nums,
+        trainData, trainLabel = multiProcessGenerateData(dataType, 2500, 11, embedding_selected_bands, activate, nora=nora, class_nums=class_nums,
                                                          intervalSelect=intervalSelect, featureTrans=featureTrans)
         # trainData, trainLabel = generateData("dataType", 2500, 11, DATA_TYPE, nora=nora, class_nums=class_nums, intervalSelect = True, featureTrans = featureTrans)
     # trainData, trainLabel = generateData(dataType, 1000, 11, DATA_TYPE,nora=nora, class_nums = class_nums)
@@ -137,7 +139,7 @@ if __name__ == '__main__':
         trainLabel = np.load(save_trainData_npy_path[:-4] + '_label.npy')
         print("train data exist!!!")
     print("begin!!!")
-    trainData = trainData[:, select_bands, :, :]
+    trainData = trainData[:, embedding_selected_bands, :, :]
     print("trainData shape : ", trainData.shape)
     print("trainLabel shape : ", trainLabel.shape)
     trainDataset = MyDataset(trainData, trainLabel)
