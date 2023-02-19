@@ -1,5 +1,5 @@
 import os
-
+import shutil
 
 def mkdir(path):
     path = path.strip()
@@ -36,5 +36,20 @@ def judegHdrDataType(hdr_dirpath, file):
         print("mend the datatype of file : ", file)
 
 if __name__ == "__main__":
-    mkdir('./test_mkdir/')
-    mkdir('test_mkdir\\')
+    # mkdir('./test_mkdir/')
+    # mkdir('test_mkdir\\')
+    dirpath_water1 = r'E:\shenzhen\img\20220427' + '\\'
+    dirpath_water2 = r'E:\shenzhen\img\20220429' + '\\'
+    dirpath_water3 = r'E:\hefei\img' + '\\'
+    dstpath = r'F:\spectralDateset\water'+ '\\'
+    water_file = ['20220427144846394', '20220604125805482', '20220429172605504']
+    filepathlist = [ dirpath_water1, dirpath_water2, dirpath_water3]
+    for file in water_file:
+        for path in filepathlist:
+            if os.path.exists(path + file + '.hdr'):
+                shutil.copy(path + file + '.hdr', dstpath + file + '.hdr')
+                shutil.copy(path + file + '.img', dstpath + file + '.img')
+                # enviData = envi.open(path + file + '.hdr', path + file + '.img')
+                break
+
+

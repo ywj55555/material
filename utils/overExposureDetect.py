@@ -15,4 +15,4 @@ maskOver = data > 38000
 pngdata = np.zeros_like(maskOver,dtype=np.uint8)
 pngdata[maskOver] = 255
 print(pngdata.shape)
-cv2.imwrite('./res/overExposureArea.png', pngdata)
+cv2.imwrite('res/overExposureArea.png', pngdata)
