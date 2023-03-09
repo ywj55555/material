@@ -155,16 +155,51 @@ class DatasetSpectralAndRgb(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.Data)
 
-class Dataset_RGB(torch.utils.data.Dataset):
+class DatasetWhole(torch.utils.data.Dataset):
     # file_list为文件列表
-    def __init__(self, file_list, png_path, label_path):
+    def __init__(self, file_list, raw_path, label_path, rgb_mode=True, bands=None, cut_num=6, resize=False):
         self.Data = file_list
-        self.png_path = png_path
+        self.raw_path = raw_path
         self.label_path = label_path
+        self.rgb_mode = rgb_mode
+        self.bands = bands
+        self.cut_num = cut_num
+        self.resize = resize
     def __getitem__(self, index):
         imgLabel = io.imread(self.label_path + self.Data[index] + '.png')
-        imgData = cv2.imread(self.png_path + self.Data[index] + '.png')  # 加载模式为 BGR
-        imgData = imgData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+        if self.Data[index] in allWater18:
+            modifyWaterLabel(imgLabel)
+        if self.Data[index] in allSkinCloth18:
+            modifySkinClothLabel(imgLabel)
+        imgData = None
+        if self.rgb_mode:
+            if isinstance(self.raw_path,list):
+                for tmppath in self.raw_path:
+                    if os.path.exists(tmppath + self.Data[index] + '.png'):
+                        imgData = cv2.imread(tmppath + self.Data[index] + '.png')  # 加载模式为 BGR
+                        imgData = imgData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+                        break
+            else:
+                imgData = cv2.imread(self.raw_path + self.Data[index] + '.png')  # 加载模式为 BGR
+                imgData = imgData.astype(np.float64)[:, :, ::-1]  # 转为 RGB 进行训练
+            if self.resize:
+                imgData_tmp = np.zeros([imgData.shape[0] + 4, imgData.shape[1] + 4, 3], dtype=np.float32)
+                # imgData_tmp = np.zeros_like(imgData, dtype=np.float32)
+                imgData_tmp[2:-2, 2:-2, :] = imgData
+                imgData = imgData_tmp
+                imgLabel_tmp = np.zeros([imgLabel.shape[0] + 4, imgLabel.shape[1] + 4], dtype=np.uint8)
+                imgLabel_tmp[2:-2, 2:-2] = imgLabel
+                imgLabel = imgLabel_tmp
+            imgData = imgData.copy()
+        else:
+            imgLabel = imgLabel[self.cut_num:-self.cut_num, self.cut_num:-self.cut_num]
+            if isinstance(self.raw_path,list):
+                for tmppath in self.raw_path:
+                    if os.path.exists(tmppath + self.Data[index] + '.raw'):
+                        imgData = raw_loader(tmppath, self.Data[index], False, cut_num=self.cut_num, bands=self.bands)
+                        break
+            else:
+                imgData = raw_loader(self.raw_path, self.Data[index], False, cut_num=self.cut_num, bands=self.bands)
         imgLabel = imgLabel.astype(np.uint8)
         # 下面这些步骤记得在 训练的时候 实现
         # imgData = imgData / 255.0
@@ -179,7 +214,9 @@ class Dataset_RGB(torch.utils.data.Dataset):
         # image = image.unsqueeze(0)
         # print(index, "imgLabel : ", imgLabel.shape)
         # print(index, "imgData", imgData.shape)
-        return imgData.copy(), imgLabel
+        # return imgData.copy(), imgLabel
+        return imgData, imgLabel
+
     def __len__(self):
         return len(self.Data)
 

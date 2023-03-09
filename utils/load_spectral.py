@@ -14,6 +14,12 @@ from utils.os_helper import judegHdrDataType
 ALL_BAND_NUM = 128
 # band = band - 1
 
+def changeWaterLable(label):
+    label[label == 1] = 4
+    label[label == 2] = 1
+    label[label == 3] = 2
+    label[label == 4] = 3
+
 def Sigmoid(x,gama = 0.1):
     x = (1/(1+(np.exp(-1 * x * gama))) - 0.5) * 2
     return x
@@ -50,9 +56,7 @@ def envi_loader(dirpath, filename, bands, norma=True):
     return imgData
 
 
-def raw_loader(dirpath, filename, nora=True, cut_num=10):
-
-    # enviData = envi.open(dirpath + filename + '.hdr', dirpath + filename + '.img')
+def raw_loader(dirpath, filename, nora=False, cut_num=10, bands=None):
     raw_data = np.fromfile(dirpath + filename+'.raw', dtype=np.float32)
     raw_data = raw_data.reshape(18, 1020, 1020)
     imgData = raw_data.transpose(1, 2, 0)
@@ -61,9 +65,8 @@ def raw_loader(dirpath, filename, nora=True, cut_num=10):
     if cut_num != 0:
         imgData = imgData[cut_num:-cut_num,cut_num:-cut_num,:]
     imgData[np.where(imgData <=0)] = 1
-    # else:
-    #     imgData = np.stack(
-    #         [imgData[:, :, i] for i in range(18)], axis=2)
+    if bands:
+        imgData = imgData[:, :, bands]
     if nora:
         imgData = envi_normalize(imgData)
     gc.collect()
@@ -72,7 +75,6 @@ def raw_loader(dirpath, filename, nora=True, cut_num=10):
 def envi_normalize(imgData):
     img_max =np.max(imgData, axis=2 ,keepdims = True)
     return imgData / (img_max+0.0001)
-    # return imgData / img_max.reshape(imgData.shape[0], imgData.shape[1], 1)
 
 def envi_wholeMaxnormalize(imgData):
     img_max =np.max(imgData)

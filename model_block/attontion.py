@@ -33,7 +33,7 @@ class PAM_Module(Module):
                 out : attention value + input feature
                 attention: B X (HxW) X (HxW)
         """
-        # m_batchsize, channle, height, width, C = x.size()
+        # m_batchsize, channle, height, width, C = x.size()  # b c h w 1
         x = x.squeeze(-1)
         # m_batchsize, C, height, width, channle = x.size()
 
@@ -49,11 +49,11 @@ class PAM_Module(Module):
         # print('x', x.shape)
 
         m_batchsize, C, height, width = x.size()
-        proj_query = self.query_conv(x).view(m_batchsize, -1, width * height).permute(0, 2, 1)
-        proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)
-        energy = torch.bmm(proj_query, proj_key)
-        attention = self.softmax(energy)
-        proj_value = self.value_conv(x).view(m_batchsize, -1, width * height)
+        proj_query = self.query_conv(x).view(m_batchsize, -1, width * height).permute(0, 2, 1)  # b h*w c
+        proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)  # b c h*w
+        energy = torch.bmm(proj_query, proj_key)  # b h*w * h*w
+        attention = self.softmax(energy)  # patch中，每个位置对其他位置的影响
+        proj_value = self.value_conv(x).view(m_batchsize, -1, width * height)  # b c h*w
 
         out = torch.bmm(proj_value, attention.permute(0, 2, 1))
         out = out.view(m_batchsize, C, height, width)
@@ -79,16 +79,16 @@ class CAM_Module(Module):
                 out : attention value + input feature
                 attention: B X C X C
         """
-        m_batchsize, C, height, width, channle = x.size()
+        m_batchsize, C, height, width, channle = x.size()  # channle 此时为1
         #print(x.size())
         proj_query = x.view(m_batchsize, C, -1)
         proj_key = x.view(m_batchsize, C, -1).permute(0, 2, 1) #形状转换并交换维度
-        energy = torch.bmm(proj_query, proj_key)
+        energy = torch.bmm(proj_query, proj_key)  # B X C X C 构建 H W 范围内的自注意力
         energy_new = torch.max(energy, -1, keepdim=True)[0].expand_as(energy)-energy
-        attention = self.softmax(energy_new)
-        proj_value = x.view(m_batchsize, C, -1)
+        attention = self.softmax(energy_new)  # 在最后一个维度激活 b c c (最后一个维度之和为1)
+        proj_value = x.view(m_batchsize, C, -1)  # b c h*w
 
-        out = torch.bmm(attention, proj_value)
+        out = torch.bmm(attention, proj_value)  # b c h*w 对每个像素的c个通道加权注意力 表征各个通道之间的相互影响 是一种自注意力机制
         out = out.view(m_batchsize, C, height, width, channle)
         # print('out', out.shape)
         # print('x', x.shape)

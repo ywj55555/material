@@ -19,6 +19,19 @@ class MyDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.Data)
 
+class MyDatasetAddSpac(torch.utils.data.Dataset):#看下数据处理步骤
+    def __init__(self,inputData,inputNorData,inputLabel):
+        self.Data=inputData
+        self.NorData=inputNorData
+        self.Label=inputLabel
+    def __getitem__(self, index): #实现__getitem__和__len__就好了，注意对应返回的值 训练数据、标签
+        img=self.Data[index]
+        nor_img=self.NorData[index]
+        label=self.Label[index]
+        return img,nor_img,label
+    def __len__(self):
+        return len(self.Data)
+
 # 得根据实际文件保存形式修改
 class Dataset_all(torch.utils.data.Dataset):
     # file_list为文件列表
@@ -39,6 +52,7 @@ class Dataset_all(torch.utils.data.Dataset):
 class MaterialSubModel(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels_1=16, mid_channels_2=32, mid_channels_3=8):
         super(MaterialSubModel, self).__init__()
+        print('MaterialSubModel')
         self.layer1 = nn.Sequential(
             # size - 2
             nn.Conv2d(in_channels, mid_channels_1, kernel_size=3, stride=1, padding=0),
@@ -61,12 +75,13 @@ class MaterialSubModel(nn.Module):
         # size - 2
         self.layer4 = nn.Sequential(
             nn.Conv2d(mid_channels_3, out_channels, kernel_size=3, stride=1, padding=0),
-            #网络的最后一层最好不用relu激活，一般分类问题用softmax激活
-            nn.LeakyReLU()
+            #网络的最后一层最好不用relu激活，一般分类问题用softmax激活 而nn.CrossEntropyLoss()自带softmax激活
+            # nn.LeakyReLU()
             # nn.ReLU()
         )
 
     def forward(self, x):
+        # print('MaterialSubModel forward')
         x=self.layer1(x)
         #print('layer1:',x.size())
         x=self.layer2(x)

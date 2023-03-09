@@ -127,7 +127,7 @@ if __name__ == '__main__':
             img /= std
             img = img.permute(0, 3, 1, 2)
             # 其他类别映射成0
-            pos_mask = (label != 1) & (label != 2)
+            pos_mask = (label != 1) & (label != 2)  # 相当于把没有标注的地方也算成了 other 也无所谓了！！
             label[pos_mask] = 0
             with autocast():
                 predict = model(img)  # B*CLASS_NUM*H*W

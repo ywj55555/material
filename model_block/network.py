@@ -1269,72 +1269,74 @@ class DBZA_network(nn.Module):  # 删除注意力模块
 class FDSSC_network(nn.Module):
     def __init__(self, band, classes):
         super(FDSSC_network, self).__init__()
-
+        # self.internal_channel = 10
+        self.internal_outChannel = 10
+        self.internal_spaceChannel = 12
         # spectral branch
         self.name = 'FDSSC'
-        self.conv1 = nn.Conv3d(in_channels=1, out_channels=24,
+        self.conv1 = nn.Conv3d(in_channels=1, out_channels=self.internal_outChannel,
                                 kernel_size=(1, 1, 7), stride=(1, 1, 2))
         # Dense block
         self.batch_norm1 = nn.Sequential(
-                                    nn.BatchNorm3d(24,  eps=0.001, momentum=0.1, affine=True), # 动量默认值为0.1
+                                    nn.BatchNorm3d(self.internal_outChannel,  eps=0.001, momentum=0.1, affine=True), # 动量默认值为0.1
                                     nn.PReLU()
         )
-        self.conv2 = nn.Conv3d(in_channels=24, out_channels=12, padding=(0, 0, 3),
+        self.conv2 = nn.Conv3d(in_channels=self.internal_outChannel, out_channels=self.internal_outChannel, padding=(0, 0, 3),
                                 kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm2 = nn.Sequential(
-                                    nn.BatchNorm3d(36, eps=0.001, momentum=0.1, affine=True),
+                                    nn.BatchNorm3d(self.internal_outChannel * 2, eps=0.001, momentum=0.1, affine=True),
                                     nn.PReLU()
         )
-        self.conv3 = nn.Conv3d(in_channels=36, out_channels=12, padding=(0, 0, 3),
+        self.conv3 = nn.Conv3d(in_channels=self.internal_outChannel * 2, out_channels=self.internal_outChannel, padding=(0, 0, 3),
                                 kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm3 = nn.Sequential(
-                                    nn.BatchNorm3d(48, eps=0.001, momentum=0.1, affine=True),
+                                    nn.BatchNorm3d(self.internal_outChannel * 3, eps=0.001, momentum=0.1, affine=True),
                                     nn.PReLU()
         )
-        self.conv4 = nn.Conv3d(in_channels=48, out_channels=12, padding=(0, 0, 3),
+        self.conv4 = nn.Conv3d(in_channels=self.internal_outChannel * 3, out_channels=self.internal_outChannel, padding=(0, 0, 3),
                                 kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm4 = nn.Sequential(
-            nn.BatchNorm3d(60, eps=0.001, momentum=0.1, affine=True),
+            nn.BatchNorm3d(self.internal_outChannel * 4, eps=0.001, momentum=0.1, affine=True),
             nn.ReLU(inplace=True)
         )
         kernel_3d = math.ceil((band - 6) / 2)
         # print(kernel_3d)
-        self.conv5 = nn.Conv3d(in_channels=60, out_channels=200, padding=(0, 0, 0),
+        self.conv5 = nn.Conv3d(in_channels=self.internal_outChannel * 4, out_channels=50, padding=(0, 0, 0),
                                 kernel_size=(1, 1, kernel_3d), stride=(1, 1, 1))
 
         self.batch_norm5 = nn.Sequential(
                                     nn.BatchNorm3d(1, eps=0.001, momentum=0.1, affine=True),
                                     nn.PReLU()
         )
-        self.conv6 = nn.Conv3d(in_channels=1, out_channels=24, padding=(1, 1, 0),
-                                kernel_size=(3, 3, 200), stride=(1, 1, 1))
+        self.conv6 = nn.Conv3d(in_channels=1, out_channels=self.internal_spaceChannel, padding=(1, 1, 0),
+                                kernel_size=(3, 3, 50), stride=(1, 1, 1))
         self.batch_norm6 = nn.Sequential(
-            nn.BatchNorm3d(24, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
+            nn.BatchNorm3d(self.internal_spaceChannel, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
             nn.PReLU()
         )
-        self.conv7 = nn.Conv3d(in_channels=24, out_channels=12, padding=(0, 0, 3),
+        self.conv7 = nn.Conv3d(in_channels=self.internal_spaceChannel, out_channels=self.internal_spaceChannel, padding=(0, 0, 3),
                                kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm7 = nn.Sequential(
-            nn.BatchNorm3d(36, eps=0.001, momentum=0.1, affine=True),
+            nn.BatchNorm3d(self.internal_spaceChannel*2, eps=0.001, momentum=0.1, affine=True),
             nn.PReLU()
         )
-        self.conv8 = nn.Conv3d(in_channels=36, out_channels=12, padding=(0, 0, 3),
+        self.conv8 = nn.Conv3d(in_channels=self.internal_spaceChannel*2, out_channels=self.internal_spaceChannel, padding=(0, 0, 3),
                                kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm8 = nn.Sequential(
-            nn.BatchNorm3d(48, eps=0.001, momentum=0.1, affine=True),
+            nn.BatchNorm3d(self.internal_spaceChannel*3, eps=0.001, momentum=0.1, affine=True),
             nn.PReLU()
         )
-        self.conv9 = nn.Conv3d(in_channels=48, out_channels=12, padding=(0, 0, 3),
+        self.conv9 = nn.Conv3d(in_channels=self.internal_spaceChannel*3, out_channels=12, padding=(0, 0, 3),
                                kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm9 = nn.Sequential(
-            nn.BatchNorm3d(60, eps=0.001, momentum=0.1, affine=True),
+            nn.BatchNorm3d(self.internal_spaceChannel*4, eps=0.001, momentum=0.1, affine=True),
             nn.PReLU()
         )
 
         self.global_pooling = nn.AdaptiveAvgPool3d(1)
         self.full_connection = nn.Sequential(
                                 nn.Dropout(p=0.5),
-                                nn.Linear(60, classes)
+                                nn.Linear(self.internal_spaceChannel*4, classes)
                                 # nn.Softmax()
         )
 
@@ -1700,7 +1702,7 @@ class DBDA_network_MISH(nn.Module):
         #print('x16', x16.shape)
         # 光谱注意力通道
         x1 = self.attention_spectral(x16)
-        x1 = torch.mul(x1, x16)
+        x1 = torch.mul(x1, x16)  # 按照论文意思 不应该相乘，输出即是加上了注意力的！！
 
 
         # spatial
@@ -1724,7 +1726,7 @@ class DBDA_network_MISH(nn.Module):
 
         # 空间注意力机制
         x2 = self.attention_spatial(x25)
-        x2 = torch.mul(x2, x25)
+        x2 = torch.mul(x2, x25)  # 按照论文意思 不应该相乘，输出即是加上了注意力的！！
 
         # model1
         x1 = self.batch_norm_spectral(x1)
@@ -1755,37 +1757,38 @@ class SSRN_network(nn.Module):
     def __init__(self, band, classes):
         super(SSRN_network, self).__init__()
         self.name = 'SSRN'
-        self.conv1 = nn.Conv3d(in_channels=1, out_channels=24,
+        self.inner_channel = 10
+        self.conv1 = nn.Conv3d(in_channels=1, out_channels=self.inner_channel,
                                 kernel_size=(1, 1, 7), stride=(1, 1, 2))
         self.batch_norm1 = nn.Sequential(
-            nn.BatchNorm3d(24, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
+            nn.BatchNorm3d(self.inner_channel, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
             nn.ReLU(inplace=True)
         )
 
-        self.res_net1 = Residual(24, 24, (1, 1, 7), (0, 0, 3))
-        self.res_net2 = Residual(24, 24, (1, 1, 7), (0, 0, 3))
-        self.res_net3 = Residual(24, 24, (3, 3, 1), (1, 1, 0))
-        self.res_net4 = Residual(24, 24, (3, 3, 1), (1, 1, 0))
+        self.res_net1 = Residual(self.inner_channel, self.inner_channel, (1, 1, 7), (0, 0, 3))
+        self.res_net2 = Residual(self.inner_channel, self.inner_channel, (1, 1, 7), (0, 0, 3))
+        self.res_net3 = Residual(self.inner_channel, self.inner_channel, (3, 3, 1), (1, 1, 0))
+        self.res_net4 = Residual(self.inner_channel, self.inner_channel, (3, 3, 1), (1, 1, 0))
 
         kernel_3d = math.ceil((band - 6) / 2)
-
-        self.conv2 = nn.Conv3d(in_channels=24, out_channels=128, padding=(0, 0, 0),
+        internal_channels = 32
+        self.conv2 = nn.Conv3d(in_channels=self.inner_channel, out_channels=internal_channels, padding=(0, 0, 0),
                                kernel_size=(1, 1, kernel_3d), stride=(1, 1, 1))
         self.batch_norm2 = nn.Sequential(
-            nn.BatchNorm3d(128, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
+            nn.BatchNorm3d(internal_channels, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
             nn.ReLU(inplace=True)
         )
-        self.conv3 = nn.Conv3d(in_channels=1, out_channels=24, padding=(0, 0, 0),
-                               kernel_size=(3, 3, 128), stride=(1, 1, 1))
+        self.conv3 = nn.Conv3d(in_channels=1, out_channels=self.inner_channel, padding=(0, 0, 0),
+                               kernel_size=(3, 3, internal_channels), stride=(1, 1, 1))
         self.batch_norm3 = nn.Sequential(
-            nn.BatchNorm3d(24, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
+            nn.BatchNorm3d(self.inner_channel, eps=0.001, momentum=0.1, affine=True),  # 动量默认值为0.1
             nn.ReLU(inplace=True)
         )
 
         self.avg_pooling = nn.AvgPool3d(kernel_size=(5, 5, 1))
         self.full_connection = nn.Sequential(
             # nn.Dropout(p=0.5),
-            nn.Linear(24, classes)  # B,classes
+            nn.Linear(self.inner_channel, classes)  # B,classes
             # nn.Softmax()
         )
 
@@ -2398,3 +2401,11 @@ class svm_rbf():
         p = clf.best_estimator_
         return p
 
+if __name__ == '__main__':
+    import numpy as np
+    model = SSRN_network(9, 4)
+    # labelNp = np.random.randint(0, 4, (2, 11, 11))
+    # label = torch.tensor(labelNp).cuda().long()
+    spectralData = torch.rand(4, 1, 11, 11, 9)  # 为什么和batch有关？？
+    predict = model(spectralData)
+    print(predict.size())

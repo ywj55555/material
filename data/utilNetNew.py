@@ -4,22 +4,27 @@ import random
 import cv2
 from skimage import io
 import math
-from multiprocessing import Process,Pool
+from multiprocessing import Process, Pool
 import multiprocessing as mp
 # import numpy as np
 from data.dictNew import *
 from utils.load_spectral import *
 import os
 import copy
+
 # from sklearn.preprocessing import LabelEncoder
 # from torch.autograd import Variable
 # import torch
 
-code2label = [0,2,2,2,0,2,2,2,1,0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,0,0,0,0,0,0] #1:skin 2:cloth 3:plant 0:other
+code2label = [255, 2, 2, 2, 0, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 3, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              0]  # 1:skin 2:cloth 3:plant 0:other
 # label2class = [255,1,2,0]
 # label2class = [0,1,2]
-from waterModeldraft import class_nums
+# from waterAndSkinModel128 import class_nums
+
+class_nums = 4
 label2class = range(class_nums)
+labelToclass18skin = [255, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0]
 label2target = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
 SKIN_TYPE = 0
@@ -46,57 +51,42 @@ waterLabelPath = '/home/cjl/ssd/dataset/shenzhen/label/Label_rename/'
 waterImgRootPath = '/home/cjl/ssd/dataset/shenzhen/img/train/'
 # waterImgRootList = os.listdir(waterImgRootPath)
 # waterImgRootList = [x for x in waterImgRootList if x[-4:] == '.img']
-waterImgRootPathList = ['vedio1','vedio2','vedio3','vedio4','vedio5','vedio6','vedio7']
+waterImgRootPathList = ['vedio1', 'vedio2', 'vedio3', 'vedio4', 'vedio5', 'vedio6', 'vedio7']
 skinAndWaterLabelPath = 'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
+
+all_label_path = '/home/cjl/dataset_18ch/label/'
+all_png_path = '/home/cjl/dataset_18ch/raw_data/'
+skinClothRawPath = '/home/cjl/dataset_18ch/raw_data/'
+waterRawPath = '/home/cjl/dataset_18ch/waterBmh/'
+
 # label_data_dir_6se = '/home/cjl/data/sensor6/label/'
 # tif_dir = '/home/cjl/data/sensor6/tif_data/'
-#env_data_dir = 'E:/BUAA_Spetral_Data/hangzhou/envi/'
-#label_data_dir = 'E:/BUAA_Spetral_Data/hangzhou/label/'
+# env_data_dir = 'E:/BUAA_Spetral_Data/hangzhou/envi/'
+# label_data_dir = 'E:/BUAA_Spetral_Data/hangzhou/label/'
 
 # 每一类 取样最小间隔
-min_interval = [0 for _ in range(class_nums)]
+class_nums18 = 10
+min_interval = [2 for _ in range(class_nums18 + 1)]
+
 # 记录每张图 每一个类 取样了多少patch
 # class_nums_record = {0:0, 1:0,2:0}
-class_nums_record = {x : 0 for x in range(class_nums)}
+class_nums_record = {x: 0 for x in range(class_nums18 + 1)}
+
+
 # output_log = open('./log/output_generate.log','w')
 
-# def generateData(dataType, num, length, selectMode=SELECT_RANDOM,nora = True,allband=True,feature=False,class_num=10,cut_num=10,per_class_num=None):
-#     Data = []
-#     Label = []
-#     # if dataType == 'train':
-#     #     dataFile = trainFile
-#     # elif dataType == 'test':
-#     #     dataFile = testFile
-#     if dataType == 'train':
-#         dataFile = trainFile
-#     elif dataType == 'test':
-#         dataFile = testFile
-#     else:
-#         dataFile = testfile
-#     for file in dataFile:
-#
-#         # t1 = time.time()
-#         imgLabel = io.imread(label_data_dir + file + '.png')
-#         imgLabel = imgLabel[cut_num:-cut_num,cut_num:-cut_num]
-#         # t2 = time.time()
-#         if not os.path.exists(env_data_dir+file+'.raw'):
-#             imgData = raw_loader(env_testdata_dir, file, nora=nora, allband=allband, feature=feature,cut_num=cut_num)
-#         else:
-#             imgData = raw_loader(env_data_dir,file,nora=nora,allband=allband,feature=feature,cut_num=cut_num)
-#         # imgData = transform2(imgData)
-#         if file in add_other_nums:
-#             tmp_per_class_num = [500,500,7500]
-#             print(file, tmp_per_class_num)
-#             pix, label = generateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, selectMode,class_num=class_num,per_class_num=tmp_per_class_num)
-#         else:
-#             print(file, per_class_num)
-#             pix, label = generateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, selectMode, class_num=class_num,
-#                                                         per_class_num=per_class_num)
-#         Data.extend(pix)
-#         Label.extend(label)
-#
-#     return Data, Label
-def generateData(dataType, num, length, typeCode, selectMode=SELECT_RANDOM,nora = True, class_nums = 2, intervalSelect = True, featureTrans = True):
+def modifyWaterLabel(label):
+    label[label == 0] = 10
+    label[label == 1] = 3
+
+
+def modifySkinClothLabel(label):
+    for i in range(3, 12):
+        label[label == i] = 10
+
+
+def generateData(dataType, num, length, typeCode, selectMode=SELECT_RANDOM, nora=True, class_nums=2,
+                 intervalSelect=True, featureTrans=True):
     Data = []
     Label = []
     if dataType == 'sea':
@@ -134,13 +124,13 @@ def generateData(dataType, num, length, typeCode, selectMode=SELECT_RANDOM,nora 
             imgData = envi_loader(imgpath, file[3:], False)
         else:
             for tmpImgPath in waterImgRootPathList:
-                if os.path.exists(imgpath + tmpImgPath + '/' + file[3:] + '.img') :
+                if os.path.exists(imgpath + tmpImgPath + '/' + file[3:] + '.img'):
                     imgData = envi_loader(imgpath + tmpImgPath + '/', file[3:], False)
                     break
         # t3 = time.time()
         # 没必要 特征变换 增加之前设计的斜率特征
         if imgData is None:
-            print("Not Found ",file)
+            print("Not Found ", file)
             continue
         # H W 22
         if featureTrans:
@@ -160,12 +150,13 @@ def generateData(dataType, num, length, typeCode, selectMode=SELECT_RANDOM,nora 
         # 11*11像素块 类别预测 作为中心像素类别 可以利用上下文信息 提升准确率
         # 分割出像素块 返回像素块和对应的类别
         if intervalSelect:
-            pix, label = intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, file, 50 ,
-                                                        class_nums)
+            pix, label, _ = intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, file, 50,
+                                                                class_nums)
         else:
-            pix, label = generateAroundDeltaPatchAllLen(imgData, imgLabel, typeCode, num, length, selectMode,class_nums)
-        #print(pix.shape)
-        #print(label.shape)
+            pix, label, _ = generateAroundDeltaPatchAllLen(imgData, imgLabel, typeCode, num, length, selectMode,
+                                                        class_nums)
+        # print(pix.shape)
+        # print(label.shape)
         # t5 = time.time()
         # print('read label:', t2 - t1, ',read envi:', t3 - t2, ',transform:', t4 - t3, ',genrate:', t5 - t4)
         # read label: 3.676800489425659 ,read envi: 9.025498867034912 ,transform: 0.22420549392700195 ,genrate: 2.00569748878479
@@ -173,10 +164,13 @@ def generateData(dataType, num, length, typeCode, selectMode=SELECT_RANDOM,nora 
         Label.extend(label)
     return Data, Label
 
-def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, nora = True, class_nums = 2, intervalSelect = True, featureTrans = True):
+
+def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, nora=False, class_nums=2,
+                              intervalSelect=True, featureTrans=True, addSpace=False):
     id = os.getpid()
     print("当前进程id: ", id, "begin!!!!!!")
     Data = []
+    DataSpace = []
     Label = []
     if dataType == 'sea':
         labelpath = waterLabelPath
@@ -184,7 +178,7 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
     elif dataType == 'bmhWater':
         labelpath = '/home/cjl/dataset_18ch/WaterLabel_mask_221011/'
         imgpath = '/home/cjl/dataset_18ch/waterBmh/'
-    elif dataType =='RiverSkinDetection1':
+    elif dataType == 'RiverSkinDetection1':
         labelpath = skinAndWaterLabelPath
         imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
     elif dataType == 'draft':
@@ -192,27 +186,42 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
         imgpath = '/home/cjl/ssd/dataset/HIK/shuichi/img/'
         print(labelpath)
         print(imgpath)
+    elif dataType == 'HZRiverSkinClothTrain' or dataType == 'HZRiverSkinClothTest':
+        labelpath = '/home/cjl/spectraldata/trainLabelAddWater/'
+        imgpath = '/home/cjl/spectraldata/RiverLakeTrainData/'
+    elif dataType == 'allTrain18' or dataType == 'allTest18':
+        labelpath = all_label_path
+        imgpath = None
     else:
         labelpath = skinAndWaterLabelPath
         imgpath = 'D:/ZY2006224YWJ/spectraldata/water_skin/'
     dataFile_LEN = len(dataFile)
-    for file_order,file in enumerate(dataFile):
+    for file_order, file in enumerate(dataFile):
         print(file)
-        print(file_order, "/" ,dataFile_LEN)
+        print(file_order, "/", dataFile_LEN)
         # output_log.writelines(str(file_order)+ "/" + str(dataFile_LEN))
         # 1 skin 2 cloth 3 other
         imgLabel = io.imread(labelpath + file + '.png')
+        if file in allWater18:
+            modifyWaterLabel(imgLabel)
+        if file in allSkinCloth18:
+            modifySkinClothLabel(imgLabel)
         # t2 = time.time()
-        # imgData = envi_loader(os.path.join(env_data_dir,file[:8])+'/', file,nora)
-        # 读取img文件
         imgData = None
-        if dataType == 'bmhWater':
+        if dataType == dataType == 'allTrain18' or dataType == 'allTest18':
             cut_num = 10
-            imgData = raw_loader(imgpath, file, cut_num=cut_num)
-            imgLabel = imgLabel[cut_num:-cut_num,cut_num:-cut_num]
+            overexposure_thre = 1000
+            if os.path.exists(skinClothRawPath + file + '.raw'):
+                imgData = raw_loader(skinClothRawPath, file, nora, cut_num=cut_num)
+            elif os.path.exists(waterRawPath + file + '.raw'):
+                imgData = raw_loader(waterRawPath, file, nora, cut_num=cut_num)
+            else:
+                print(file, ' raw not exist!!!')
+            imgLabel = imgLabel[cut_num:-cut_num, cut_num:-cut_num]
         else:
-            if os.path.exists(imgpath + file[3:] + '.img'):
-                imgData = envi_loader(imgpath, file[3:], bands, False)
+            overexposure_thre = 45000
+            if os.path.exists(imgpath + file + '.img'):
+                imgData = envi_loader(imgpath, file, bands, False)
             else:
                 print(file, 'not found!!!')
                 continue
@@ -223,7 +232,7 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
             print("kindsOfFeatureTransformation......")
             # output_log.writelines("kindsOfFeatureTransformation......")
             # 11 -》 21
-            imgData = kindsOfFeatureTransformation_slope(imgData,activate, nora)
+            imgData = kindsOfFeatureTransformation_slope(imgData, activate, nora)
         else:
             if nora:
                 print("normalizing......")
@@ -233,19 +242,24 @@ def singleProcessGenerateData(dataType, dataFile, num, length, bands, activate, 
         # 分割出像素块 返回像素块和对应的类别
         if intervalSelect:
             print("intervalGenerateAroundDeltaPatchAllLen...")
-            pix, label = intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, file, 50, class_nums)
+            pix, label, pixSpace = intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, file, 50, class_nums,
+                                                                overexposure_thre=overexposure_thre, addSpace=addSpace)
         else:
             print("random sampling...")
-            pix, label = generateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, class_nums)
+            pix, label, pixSpace = generateAroundDeltaPatchAllLen(imgData, imgLabel, num, length, class_nums,
+                                                        overexposure_thre=overexposure_thre, addSpace=addSpace)
         Data.extend(pix)
+        if addSpace:
+            DataSpace.extend(pixSpace)
         Label.extend(label)
         del imgData
         gc.collect()
     # id = os.getpid()
-    print("当前进程id: ", id , "done!!!!!!")
-    return Data, Label
+    print("当前进程id: ", id, "done!!!!!!")
+    return Data, Label, DataSpace
 
-def singleProcessGenerateRgbData(dataFile, num, rgbpath, labelpath, length, class_nums = 2, intervalSelect = True):
+
+def singleProcessGenerateRgbData(dataFile, num, rgbpath, labelpath, length, class_nums=2, intervalSelect=True):
     id = os.getpid()
     print("当前进程id: ", id, "begin!!!!!!")
     Data = []
@@ -258,11 +272,11 @@ def singleProcessGenerateRgbData(dataFile, num, rgbpath, labelpath, length, clas
     #     # rgbpath = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
     # else:
     #     labelpath = skinAndWaterLabelPath
-        # rgbpath = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+    # rgbpath = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
     dataFile_LEN = len(dataFile)
-    for file_order,file in enumerate(dataFile):
+    for file_order, file in enumerate(dataFile):
         print(file)
-        print(file_order, "/" ,dataFile_LEN)
+        print(file_order, "/", dataFile_LEN)
         # output_log.writelines(str(file_order)+ "/" + str(dataFile_LEN))
         # 1 skin 2 cloth 3 other
         imgLabel = io.imread(labelpath + file + '.png')
@@ -287,17 +301,20 @@ def singleProcessGenerateRgbData(dataFile, num, rgbpath, labelpath, length, clas
         del imgData
         gc.collect()
     # id = os.getpid()
-    print("当前进程id: ", id , "done!!!!!!")
+    print("当前进程id: ", id, "done!!!!!!")
     return Data, Label
 
-def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, activate='sig', nora = True, class_nums = 2,
-                             intervalSelect = True, featureTrans = True, rgbData = False,labelpath = None, imgpath = None):
+
+def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, activate=None, nora=False, class_nums=4,
+                             intervalSelect=True, featureTrans=False, rgbData=False, labelpath=None, imgpath=None,
+                             addSpace=False):
     all_process_data = []
     all_process_label = []
+    all_space_data = []
     if dataType == 'sea':
         dataFile = SeaFile
-    elif dataType == 'bmhWater':
-        dataFile = bmhTrain
+    # elif dataType == 'bmhWater':
+    #     dataFile = bmhTrain
     elif dataType == 'RiverSkinDetection1':
         dataFile = RiverSkinDetection1
     elif dataType == 'RiverSkinDetection2':
@@ -308,6 +325,14 @@ def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, act
         dataFile = RiverSkinDetection1 + RiverSkinDetection2 + RiverSkinDetection3
     elif dataType == 'draft':
         dataFile = hk_draft
+    elif dataType == 'HZRiverSkinClothTrain':
+        dataFile = HZRiverSkinClothTrain
+    elif dataType == 'HZRiverSkinClothTest':
+        dataFile = HZRiverSkinClothTest
+    elif dataType == 'allTrain18':
+        dataFile = allTrain18
+    elif dataType == 'allTest18':
+        dataFile = allTest18
     else:
         dataFile = RiverSkinDetectionTest
     # 启动多个进程 分发文件列表
@@ -333,20 +358,18 @@ def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, act
         right = (i + 1) * perProcess if (i + 1) * perProcess < all_file_nums else all_file_nums
         # args : (dataType, dataFile, num, length, nora = True, class_nums = 2, intervalSelect = True, featureTrans = True)
         # 同步运行,阻塞、直到本次任务执行完毕拿到 single_res
-        if rgbData: # (dataFile, num, rgbpath, labelpath, length, class_nums = 2, intervalSelect = True)
+        if rgbData:  # (dataFile, num, rgbpath, labelpath, length, class_nums = 2, intervalSelect = True)
             single_res = process_poll.apply_async(singleProcessGenerateRgbData, args=(
-                dataFile[left:right], num, imgpath, labelpath, length,class_nums, intervalSelect,
-                ))
+                dataFile[left:right], num, imgpath, labelpath, length, class_nums, intervalSelect,
+            ))
         else:
             single_res = process_poll.apply_async(singleProcessGenerateData, args=(
-            dataType, dataFile[left:right], num, length, bands, activate, nora, class_nums, intervalSelect,
-            featureTrans))
+                dataType, dataFile[left:right], num, length, bands, activate, nora, class_nums, intervalSelect,
+                featureTrans, addSpace))
         # single_res = process_poll.apply_async(generateFun, args=(dataType, dataFile[left:right], num, length, bands, activate, nora, class_nums, intervalSelect, featureTrans))
         seg_data_all_process.append(single_res)  # 将调用apply_async方法，得到返回进程内存地址结果
     process_poll.close()
     process_poll.join()
-    # gc.collect()
-    # gc.collect()
     # gc.collect()
     for single_res in seg_data_all_process:
         # print('Single_process!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
@@ -357,21 +380,27 @@ def multiProcessGenerateData(dataType=None, num=2500, length=11, bands=None, act
         # tmpres 的 shape 可能不一致 所以
         all_process_data.extend(tmpres[0])
         all_process_label.extend(tmpres[1])
+        if not rgbData and addSpace:
+            all_space_data.extend(tmpres[2])
         del tmpres
         gc.collect()
     all_process_data = np.array(all_process_data, dtype=np.float32)
     all_process_label = np.array(all_process_label, dtype=np.int8)
+    all_space_data = np.array(all_space_data, dtype=np.float32)
     stop = time.time()
     print('seg data cost time is %s' % (stop - start))
     # output_log.writelines('seg data cost time is %s' % (stop - start))
     # output_log.close()
-    return all_process_data, all_process_label
+    return all_process_data, all_process_label, all_space_data
+
 
 def convert_to_one_hot(y, C):
-    return np.eye(C,dtype=np.int8)[y.reshape(-1)]
+    return np.eye(C, dtype=np.int8)[y.reshape(-1)]
+
 
 # 随机选取 存在的问题 选取可能不均匀 可能边缘，或者一些 比较分歧、重要的地方不能保证选取到，数据多样性就不能保证
-def generateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11,class_nums = 2, overexposure_thre = 45000):
+def generateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11, class_nums=2,
+                                   overexposure_thre=45000, addSpace=False):
     row, col, d = imgData.shape
     imgData = np.array(imgData)
     # H W C -> C H W
@@ -384,7 +413,8 @@ def generateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11
     gc.collect()
     # img.shape -> (1, channels, row, col)
     # 像素块变量 保存提取的像素块
-    pix = np.empty([0, d, length, length], dtype=float)
+    pix = np.empty([0, d, length, length], dtype=np.float32)
+    pixSpace = np.empty([0, d, length, length], dtype=np.float32)
     labels = np.empty([0, class_nums])
     length1 = int(length / 2)
     for label in range(1, class_nums + 1):  # 共有3类，取值为1、2、3、...、30，0为未标注
@@ -409,7 +439,7 @@ def generateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11
 
         # 以下 用于 不均衡采样 类别样本
         per_class_num = [labelCount]
-        per_class_num_care = [labelCount for _ in range(class_nums-1)]
+        per_class_num_care = [labelCount for _ in range(class_nums - 1)]
         per_class_num.extend(per_class_num_care)
         # print(per_class_num)
         # [1000,2000]
@@ -426,7 +456,7 @@ def generateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11
         for num in range(per_class_num[label2class[label]]):
             index = random.randint(0, pixels_nums - 1)  # 前闭后闭区间 随机选取
             # labels = np.append(labels, label)
-            #print(np.reshape(tmp, [-1, 4]), np.reshape(tmp, [-1, 4]).shape)
+            # print(np.reshape(tmp, [-1, 4]), np.reshape(tmp, [-1, 4]).shape)
             labels = np.append(labels, np.reshape(tmp, [-1, class_nums]), axis=0)
             x = label_index[0][index]
             y = label_index[1][index]
@@ -438,11 +468,13 @@ def generateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11
             # 堆叠像素块
             pix = np.append(pix, pixAround, axis=0)
     labels = np.array(labels).astype('int64')
-    pix = np.array(pix, dtype=float)
-    return pix, labels
+    pix = np.array(pix, dtype=np.float32)
+    return pix, labels, pixSpace
 
-def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11, filename = 'null',thre=500, class_nums = 2, overexposure_thre = 45000):
-    row, col,d = imgData.shape
+
+def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, length=11, filename='null', thre=500,
+                                           class_nums=2, overexposure_thre=45000, addSpace=False):
+    row, col, d = imgData.shape
     # img = np.expand_dims(imgData, 0)
     imgData = np.array(imgData)
     # H W C -> C H W
@@ -451,18 +483,28 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
     max_mask = np.max(imgData, axis=2)
     imgLabel[max_mask > overexposure_thre] = 255  # 不参与训练
     img = imgData.transpose(2, 0, 1)
-    del max_mask
-    gc.collect()
     # B C H W
-    img = np.expand_dims(img, 0)
-    length1 = int(length / 2)
-    pix = np.empty([0, d, length, length], dtype=float)
-    labels = np.empty([0, class_nums])
-    # 去掉过曝区域
+    img = np.expand_dims(img, 0)  # b c h w
 
-    for label in range(0, class_nums):  #label 已经转为0，1，2，3，4了 ,3植物 2衣物 1皮肤 4其他，0无标签
+    img_spac = None
+    if addSpace:
+        img_spac = img.copy()  # B C H W
+        img_spac_max = img_spac.copy()
+        tup = (2, 3)
+        # ori = img
+        # 切面方向归一化
+        for tdim in tup:
+            img_spac_max = np.amax(img_spac_max, axis=tdim, keepdims=True)
+        img_spac = img_spac / img_spac_max
+
+    length1 = int(length / 2)
+    pix = np.empty([0, d, length, length], dtype=np.float32)
+    labels = np.empty([0, class_nums])
+    pixSpace = np.empty([0, d, length, length], dtype=np.float32)
+
+    for label in range(1, class_nums18 + 1):  # 0:other 1:skin 2:cloth 3:water 18通道皮肤衣物数据集是10分类标注的
         # cnt = 1
-        label_index = np.where(imgLabel[length1:-length1,length1:-length1] == label)  # 找到标签值等于label的下标点 size：2*个数
+        label_index = np.where(imgLabel[length1:-length1, length1:-length1] == label)  # 找到标签值等于label的下标点 size：2*个数
         pixels_nums = len(label_index[0])
         if pixels_nums <= thre:
             continue
@@ -480,13 +522,13 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
                 间隔取样：边界部分取样点可能相邻
                 边界部分本来就难识别，多取样也并非坏事
         '''
-        #最小采样间隔
-        interval =  min_interval[label]
-        #间隔1采样，数量除以4
-        if pixels_nums > interval*interval*labelCount:
-            mul = math.sqrt(pixels_nums/labelCount)
+        # 最小采样间隔
+        interval = min_interval[label]
+        # 间隔1采样，数量除以4
+        if pixels_nums > interval * interval * labelCount:
+            mul = math.sqrt(pixels_nums / labelCount)
             interval = round(mul)
-        print('before :',filename, 'label:',label, 'interval ',interval,'before :',pixels_nums)
+        print('before :', filename, 'label:', label, 'interval ', interval, 'before :', pixels_nums)
         # print(label)
         # 也可以直接在原数组上操作，就不用排序索引了 10520没有进行采样
         # 一定要用深拷贝 可以了解一下 深拷贝 和 浅拷贝
@@ -498,12 +540,14 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
         # print('cnt: ',cnt)
         mask = []
         for i in range(cnt):
-            mask += [mk for mk in range(i*interval,interval*(i+1)-1 if interval*(i+1)-1<imgLabel.shape[0] else imgLabel.shape[0])]
+            mask += [mk for mk in range(i * interval,
+                                        interval * (i + 1) - 1 if interval * (i + 1) - 1 < imgLabel.shape[0] else
+                                        imgLabel.shape[0])]
             # imgLabel_tmp[i*cnt:cnt*(i+1)-1,:]=0
         # print('mask',mask)
-        imgLabel_tmp[mask,:] = 255
+        imgLabel_tmp[mask, :] = 255
         new_label_index = np.where(imgLabel_tmp == label)
-        print('after row sampling: ',len(new_label_index[0]))
+        print('after row sampling: ', len(new_label_index[0]))
         # print(imgLabel_tmp)
         # 隔列取样
         mask = []
@@ -512,54 +556,56 @@ def intervalGenerateAroundDeltaPatchAllLen(imgData, imgLabel, labelCount=2000, l
         cnt = math.ceil(imgLabel.shape[1] / interval)
         # print('cnt: ', cnt)
         for i in range(cnt):
-            mask += [mk for mk in range(i*interval,interval*(i+1)-1 if interval*(i+1)-1<imgLabel.shape[1] else imgLabel.shape[1])]
-        imgLabel_tmp[:,mask] = 255
+            mask += [mk for mk in range(i * interval,
+                                        interval * (i + 1) - 1 if interval * (i + 1) - 1 < imgLabel.shape[1] else
+                                        imgLabel.shape[1])]
+        imgLabel_tmp[:, mask] = 255
         # print('mask', mask)
-        #取样后的索引
-        new_label_index = np.where(imgLabel_tmp[length1:-length1,length1:-length1] == label)
-        #删掉边界像素！！
-        # new_pixels_nums = len(new_label_index[0])
-        # # 还要删掉边界位置
-        # new_delete_index = []
-        # for i in range(new_pixels_nums):
-        #     if (new_label_index[0][i] <= length1 or new_label_index[0][i] >= row - length1 or new_label_index[1][
-        #         i] <= length1 or
-        #             new_label_index[1][i] >= col - length1):
-        #         new_delete_index.append(i)
-        # # 删除多列
-        # new_label_index = np.delete(new_label_index, new_delete_index, axis=1)
-        #取样所有label_index
+        # 取样后的索引
+        new_label_index = np.where(imgLabel_tmp[length1:-length1, length1:-length1] == label)
+        # 删掉边界像素！！
 
         new_count = len(new_label_index[0])
-        print('after sampling colounm',filename,label,new_count)
-        # print(imgLabel_tmp)
-        # continue
-        # f.write(filename+' sampling '+str(label)+ ' class: '+str(new_count)+'\n')
+        print('after sampling colounm', filename, label, new_count)
+
         tmp = np.array(convert_to_one_hot(np.array([class_order for class_order in range(class_nums)]), class_nums)[
-                           label2class[label]])
+                           labelToclass18skin[label]])
 
         global class_nums_record
-        class_nums_record[label] += new_count
+        class_nums_record[labelToclass18skin[label]] += new_count
         for index in range(new_count):
             labels = np.append(labels, np.reshape(tmp, [-1, class_nums]), axis=0)
             x = new_label_index[0][index]
             y = new_label_index[1][index]
             if length % 2 == 0:
-                pixAround = img[:,:,x : x + 2*length1, y : y + 2*length1]  # 21,21,bands
+                pixAround = img[:, :, x: x + 2 * length1, y: y + 2 * length1]  # 21,21,bands
+                if addSpace:
+                    pixSpaceAround = img_spac[:, :, x: x + 2 * length1, y: y + 2 * length1]
+                else:
+                    pixSpaceAround = np.empty([0, d, length, length], dtype=np.float32)
             else:
                 pixAround = img[:, :, x: x + 2 * length1 + 1, y: y + 2 * length1 + 1]  # 21,21,bands
+                if addSpace:
+                    pixSpaceAround = img_spac[:, :, x: x + 2 * length1 + 1, y: y + 2 * length1 + 1]
+                else:
+                    pixSpaceAround = np.empty([0, d, length, length], dtype=np.float32)
             pix = np.append(pix, pixAround, axis=0)
+            if addSpace:
+                pixSpace = np.append(pixSpace, pixSpaceAround, axis=0)
             # np.save(save_path + filename + name_list[label - 1] + str(index).rjust(4, '0') + '.npy', pixAround)
     labels = np.array(labels).astype('int64')
-    pix = np.array(pix, dtype=float)
+    pix = np.array(pix, dtype=np.float32)
+    pixSpace = np.array(pixSpace, dtype=np.float32)
     # print(pix.shape)
     # print('label shape:',labels.shape)
     # 这个不是 单张图 的抽样结果吧！！！
-    print(filename, "sampling :",class_nums_record)
+    print(filename, "sampling :", class_nums_record)
     # B C H W
-    return pix, labels
+    return pix, labels, pixSpace
 
-def generateAroundDeltaPatchAllLen_6se(imgData, imgLabel, typeCode, labelCount=2000, length=11, selectMode=SELECT_RANDOM):
+
+def generateAroundDeltaPatchAllLen_6se(imgData, imgLabel, typeCode, labelCount=2000, length=11,
+                                       selectMode=SELECT_RANDOM):
     row, col, d = imgData.shape
     imgData = np.array(imgData)
     img = imgData.transpose(2, 0, 1)
@@ -584,7 +630,7 @@ def generateAroundDeltaPatchAllLen_6se(imgData, imgLabel, typeCode, labelCount=2
         if pixels_nums == 0:
             continue
 
-        tmp = np.array(label2target[label%4])
+        tmp = np.array(label2target[label % 4])
 
         if selectMode == SELECT_ALL:
             for index in range(pixels_nums):
@@ -597,7 +643,7 @@ def generateAroundDeltaPatchAllLen_6se(imgData, imgLabel, typeCode, labelCount=2
             for num in range(labelCount):
                 index = random.randint(0, pixels_nums - 1)  # 前闭后闭区间
                 # labels = np.append(labels, label)
-                #print(np.reshape(tmp, [-1, 4]), np.reshape(tmp, [-1, 4]).shape)
+                # print(np.reshape(tmp, [-1, 4]), np.reshape(tmp, [-1, 4]).shape)
                 labels = np.append(labels, np.reshape(tmp, [-1, 4]), axis=0)
                 x = label_index[0][index]
                 y = label_index[1][index]
@@ -609,6 +655,7 @@ def generateAroundDeltaPatchAllLen_6se(imgData, imgLabel, typeCode, labelCount=2
     # print(pix.shape)
     # print('label shape:',labels.shape)
     return pix, labels
+
 
 if __name__ == '__main__':
     pass

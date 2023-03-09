@@ -5,6 +5,7 @@ import os
 import cv2
 from tqdm import tqdm
 from utils.os_helper import mkdir
+from skimage import io
 import random
 random.seed(2021)
 np.random.seed(2021)
@@ -60,32 +61,75 @@ def get_random_rgb(color_nums = 2):
         rgb_list.append(rgb2)
     return rgb_list
 
+from data.dictNew import *
+def changeWaterLable(label):
+    label[label == 1] = 4
+    label[label == 2] = 1
+    label[label == 3] = 2
+    label[label == 4] = 3
+
+def modifySkinClothLabel(label):
+    for i in range(3, 12):
+        label[label == i] = 10
 def val_label(png_path, label_path, save_path, label_nums=2):
     rgb_list = get_random_rgb(label_nums)
     label_list = os.listdir(label_path)
     for file in tqdm(label_list):
         if file[-4:] != '.png':
             continue
+        if os.path.exists(save_path + file):
+            continue
         print(file)
         if not os.path.exists(png_path + file):
             print(file, "not exist in : ", png_path)
             continue
         imgGt = cv2.imread(png_path + file)
-        img_label = cv2.imread(label_path + file, cv2.IMREAD_GRAYSCALE)
+        # img_label = cv2.imread(label_path + file, cv2.IMREAD_GRAYSCALE)
+        img_label = io.imread(label_path + file)
+        if file[:-4] in extraTest18:
+            changeWaterLable(img_label)
+            imgLabel_tmp2 = np.zeros([img_label.shape[0] + 10, img_label.shape[1] + 10],
+                                     dtype=np.uint8)
+            imgLabel_tmp2[5:-5, 5:-5] = img_label
+            img_label = imgLabel_tmp2
+        if file[:-4] in allWater18:
+            img_label[img_label == 1] = 3
+        if file[:-4] in allSkinCloth18:
+            img_label[img_label == 3] = 0
+            # modifySkinClothLabel(img_label)
+            # for i in range(3, 12):
+            #     img_label[img_label == i] = 10
+            # img_label[img_label == 0] = 255
+            # img_label[img_label == 10] = 0
+
         for color_num in range(1, label_nums + 1):
             imgGt = mask_color_img(imgGt, mask=(img_label == color_num), color=rgb_list[color_num - 1], alpha=0.7)
         cv2.imwrite(save_path + file, imgGt)
 
+def verify_path(path):
+    if path.find('\\') == -1:
+        return path
+    return path.replace('\\', '/')
+
 if __name__ == '__main__':
     # pass
     # rgb_list = get_random_rgb(4)
-    labelpath = 'D:/dataset/shuichi_label/'
-    pngpath = 'D:/dataset/shuichi/need_mark/'
-    png_path = 'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
-    waterLabelPath = 'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
-    save_path = 'D:/dataset/shuichi/mark_rend/'
+    labelpath = '/home/cjl/dataset_18ch/label/'
+    rgbpath = '/home/cjl/dataset_18ch/raw_data/'
+    # labelpath = r'/home/cjl/waterDataset/dataset/hefei/label/'
+    labelpath = verify_path(labelpath)
+    # print(labelpath)
+    # labelpath = r'D:\ZY2006224YWJ\material-extraction\muli-spactral-data\07-14-hz\label/'
+    pngpath ='/home/cjl/dataset_18ch/raw_data/'
+    pngpath = verify_path(pngpath)
+    # png_path = r'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
+    # waterLabelPath = r'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
+    save_path = r'/home/cjl/dataset_18ch/rgbAll_rend/'
+    save_path = verify_path(save_path)
     mkdir(save_path)
-    val_label(pngpath, labelpath, save_path, 3)
+    val_label(pngpath, labelpath, save_path, 4)
+
+
     # png_path = r'D:\ZY2006224YWJ\material-extraction\needMark' + '\\'
     # label_path = r'D:\ZY2006224YWJ\material-extraction\needMark\backup\finalLabel' + '\\'
     # test_batch = 4

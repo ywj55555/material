@@ -16,6 +16,7 @@ def parse_args():
     parser.add_argument('--intervalSelect', '-i', default=True, type=bool, help="The path of save model")
     parser.add_argument('--activa', '-a', default="sig", type=str, help="The path of save model")
     parser.add_argument('--min_kept', '-k', default=500000, type=int, help="The path of save model")
+    parser.add_argument('--patch_size', '-s', default=11, type=int, help="The path of save model")
 
     args = parser.parse_args()                                       # 步骤三
     return args

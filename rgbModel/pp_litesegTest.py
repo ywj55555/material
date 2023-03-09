@@ -166,7 +166,7 @@ for epoch in epoch_list:
         imgData = np.array(imgData)
         inputData = torch.tensor(imgData).float().cuda()
         inputData = inputData / 255.0
-        inputData -= mean
+        inputData -= mean  # b h w c 6 1020 1020 3
         inputData /= std
         inputData = inputData.permute(0, 3, 1, 2)
         with torch.no_grad():
