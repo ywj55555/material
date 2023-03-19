@@ -53,7 +53,7 @@ model_path = ['SkinClothWaterDBDA_0.001_64_4_handSelect_22276800',
               ]
 model_name = ['DBDA', 'SSRN', 'DBMA', 'FDSSC']
 inputBands = len(hand_selected_bands)
-test_file_type = ['train', 'test', 'extraTest']
+test_file_type = ['train', 'test', 'extraTest', 'allTest', 'extraTest']
 color_class = [[0, 0, 255], [255, 0, 0], [0, 255, 0]]
 
 epoch_list = [str(x) for x in range(4, 300, 5)]  # twoBranchWhole
@@ -70,10 +70,21 @@ f2_csv.writerow(csv2_header)
 print('inputBands', inputBands)
 
 
+# if FOR_TESTSET == 1:
+#     file_list = allTest18
+# elif FOR_TESTSET == 2:
+#     file_list = extraTest18
+# else:
+#     file_list = allTrain18
+
 if FOR_TESTSET == 1:
     file_list = allTest18
 elif FOR_TESTSET == 2:
-    file_list = extraTest18
+    file_list = allExtraTest18
+elif FOR_TESTSET == 3:
+    file_list = extraTest18 + allTest18
+elif FOR_TESTSET == 4:
+    file_list = allExtraSelectedTest18
 else:
     file_list = allTrain18
 # file_list = [x[3:] for x in file_list]
@@ -129,10 +140,10 @@ for epoch in epoch_list:
                 continue
             # H W 22
             tmp_cut = cut_num + 5  # 15
-            if filename in extraTest18:
+            if filename in allExtraTest18:
                 tmp_cut -= 5  #10
             label_tmp = label_data[tmp_cut:-tmp_cut, tmp_cut:-tmp_cut]  # 990
-            if filename in extraTest18:
+            if filename in allExtraTest18:
                 changeWaterLable(label_tmp)
             if filename in allWater18:
                 label_tmp[label_tmp == 1] = 3
@@ -207,7 +218,7 @@ for epoch in epoch_list:
             predict_png = predict_png.reshape(imgData.size()[2]-10,imgData.size()[3]-10)
 
             imgGt = cv2.imread(all_png_path + filename + '.png')
-            if filename in extraTest18:
+            if filename in allExtraTest18:
                 tmp_cut += 5  #15
             imgGt = imgGt[tmp_cut:-tmp_cut, tmp_cut:-tmp_cut]  # 990
             # imgGt2 = imgGt.copy()
@@ -246,9 +257,10 @@ for epoch in epoch_list:
     print(epoch, 'all test micro accuracy:', res['accuracy'], 'macro avg :', res['macro avg']['f1-score'],
           'kappa_score: ', kappa_score)
     print('\n')
-    print('average cost time :', cost_time / len(file_list))
+    print('average cost time :', single_cost / len(file_list))
     f2_csv.writerow(csv2_line)
 f2.close()
+print('all cost time:', cost_time)
 
 
 

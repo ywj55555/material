@@ -29,6 +29,7 @@ def parse_test_args():
     parser.add_argument('--FOR_TESTSET','-d',default=0, type=int,help = "The predict data")
     parser.add_argument('--model_select', '-m', default=1, type=int, help="normalize data")
     parser.add_argument('--test_batch','-b', default=4,type=int,help = "The batchsize of predict")# 步骤二，后面的help是我的描述
+    parser.add_argument('--dilate_open', '-o', default=False, type=bool, help="The batchsize of predict")
     args = parser.parse_args()                                       # 步骤三
     return args
 

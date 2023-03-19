@@ -71,12 +71,15 @@ def changeWaterLable(label):
 def modifySkinClothLabel(label):
     for i in range(3, 12):
         label[label == i] = 10
-def val_label(png_path, label_path, save_path, label_nums=2):
+def val_label(png_path, label_path, save_path, label_nums=2, labelList=None):
     rgb_list = get_random_rgb(label_nums)
     label_list = os.listdir(label_path)
     for file in tqdm(label_list):
         if file[-4:] != '.png':
             continue
+        if labelList is not None:
+            if file[:-4] not in labelList:
+                continue
         if os.path.exists(save_path + file):
             continue
         print(file)
@@ -114,20 +117,21 @@ def verify_path(path):
 if __name__ == '__main__':
     # pass
     # rgb_list = get_random_rgb(4)
+    from data.dictNew import *
     labelpath = '/home/cjl/dataset_18ch/label/'
     rgbpath = '/home/cjl/dataset_18ch/raw_data/'
     # labelpath = r'/home/cjl/waterDataset/dataset/hefei/label/'
     labelpath = verify_path(labelpath)
     # print(labelpath)
     # labelpath = r'D:\ZY2006224YWJ\material-extraction\muli-spactral-data\07-14-hz\label/'
-    pngpath ='/home/cjl/dataset_18ch/raw_data/'
+    pngpath ='/home/cjl/dataset_18ch/needTestRaw/'
     pngpath = verify_path(pngpath)
     # png_path = r'D:/ZY2006224YWJ/spectraldata/water_skin_rgb/'
     # waterLabelPath = r'D:/ZY2006224YWJ/spectraldata/trainLabelAddWater/'
-    save_path = r'/home/cjl/dataset_18ch/rgbAll_rend/'
+    save_path = r'/home/cjl/dataset_18ch/needTest_rend/'
     save_path = verify_path(save_path)
     mkdir(save_path)
-    val_label(pngpath, labelpath, save_path, 4)
+    val_label(pngpath, labelpath, save_path, 4, extraTest18)
 
 
     # png_path = r'D:\ZY2006224YWJ\material-extraction\needMark' + '\\'

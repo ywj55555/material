@@ -114,6 +114,11 @@ def open_demo_diff_size(image, erode_kernel, dilate_kernel):
     dst = cv2.dilate(dst, str_dilate_kernel)
     return dst
 
+def dilate_open(label, dilate_size=3, open_erode_size=11, open_dilate_size=16):
+    # 先膨胀皮肤
+    label_data = dilate_specific_label(label, dilate_size, 1)
+    label_data = open_all_diff_size(label_data, open_erode_size, open_dilate_size)
+    return label_data
 
 def paint_rect(png, ori, morphology=1, kernel=25, thre=200):
     '''可以增加额外的判断逻辑;

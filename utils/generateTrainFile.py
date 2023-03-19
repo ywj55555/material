@@ -37,7 +37,8 @@ for file in trainFile:
         continue
     # if file in test_list:
     testf.write('\''+file[:-4]+'\','+'\n')
-    shutil.copy(tainpath + file[:-4] + '.png', dstPngPath + file[:-4] + '.png')
+    if not os.path.exists(dstPngPath + file[:-4] + '.png'):
+        shutil.copy(tainpath + file[:-4] + '.png', dstPngPath + file[:-4] + '.png')
     # else:
     #     trainf.write('\'' + file[:-4] + '\',' + '\n')
 

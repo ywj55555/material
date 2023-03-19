@@ -14,6 +14,7 @@ from model_block.PP_liteseg_final import PPLiteSeg
 from model_block.FreeNet import FreeNet
 from model_block.SSDGL import SSDGL
 from model_block.BiSeNetV2 import BiSeNetV2
+from utils.paint_rect import dilate_open
 import sys
 
 warnings.filterwarnings("ignore")
@@ -25,9 +26,11 @@ FOR_TESTSET = args.FOR_TESTSET
 test_batch = args.test_batch
 # test_batch = 4
 model_select = args.model_select
+dilate_open_used = args.dilate_open
 # model_select = 1
 print(FOR_TESTSET, test_batch)
 print(model_select)
+print('dilate_open_used ', dilate_open_used)
 log = './log/'
 mkdir(log)
 cut_num = 10
@@ -61,7 +64,7 @@ model_name = ['twoBranch', 'PPLiteSeg', 'FreeNet', 'SSDGL', 'twoBranchWhole',
               'twoBranch3.0_9', 'twoBranch3.0_7', 'twoBranch3.0_5',
               'twoBranch3.0_onlySpace', 'twoBranch3.0_onlySpectrum', ]  # 注意是否是2.0版本
 inputBands = len(hand_selected_bands)
-test_file_type = ['train', 'test', 'extraTest']
+test_file_type = ['train', 'test', 'extraTest', 'allTest', 'extraTest']
 color_class = [[0, 0, 255], [255, 0, 0], [0, 255, 0]]
 mean = torch.tensor([0.5, 0.5, 0.5]).cuda()
 std = torch.tensor([0.5, 0.5, 0.5]).cuda()
@@ -77,6 +80,7 @@ if model_select == 9:
     epoch_list = [str(x) for x in range(300)]
 else:
     epoch_list = [str(x) for x in range(4, 300, 5)]
+# epoch_list = [str(x) for x in [17]]
 
 csv2_save_path = './log/'
 mkdir(csv2_save_path)
@@ -138,7 +142,9 @@ for epoch in epoch_list:
         model.aux_mode = 'eval'
     label_list = []
     predict_list = []
+    predict_dilate_open_list = []
     count_right = 0
+    count_right_dilate_open = 0
     count_tot = 0
     # 渲染测试集！
     result_dir = './result/' + model_name[model_select - 1] + '_skinClothWater18/' + test_file_type[FOR_TESTSET] + '/' + \
@@ -148,7 +154,11 @@ for epoch in epoch_list:
     if FOR_TESTSET == 1:
         file_list = allTest18
     elif FOR_TESTSET == 2:
-        file_list = extraTest18
+        file_list = allExtraTest18
+    elif FOR_TESTSET == 3:
+        file_list = extraTest18 + allTest18
+    elif FOR_TESTSET == 4:
+        file_list = allExtraSelectedTest18
     else:
         file_list = allTrain18
     print("the number of test file:", len(file_list))
@@ -187,28 +197,28 @@ for epoch in epoch_list:
 
             if model_select in [1, 5, 6, 8, 9, 10, 11, 12, 13, 14]:
                 tmp_cut_num = cut_num + int(patchsize / 2)
-                if filename in extraTest18:
+                if filename in allExtraTest18:
                     tmp_cut_num -= 5
                 imgLabel_tmp = imgLabel_tmp[tmp_cut_num:-tmp_cut_num, tmp_cut_num:-tmp_cut_num]
             elif model_select in [3, 4]:
                 tmp_cut_num = cut_num
-                if filename in extraTest18:
+                if filename in allExtraTest18:
                     tmp_cut_num -= 5
                 imgLabel_tmp = imgLabel_tmp[tmp_cut_num:-tmp_cut_num, tmp_cut_num:-tmp_cut_num]
-            elif model_select in [2] and filename in extraTest18:
+            elif model_select in [2] and filename in allExtraTest18:
                 imgLabel_tmp2 = np.zeros([imgLabel_tmp.shape[0] + 10, imgLabel_tmp.shape[1] + 10], dtype=np.uint8)
                 imgLabel_tmp2[5:-5, 5:-5] = imgLabel_tmp
                 imgLabel_tmp = imgLabel_tmp2
             elif model_select in [7]:
                 expand_size = 2
-                if filename in extraTest18:
+                if filename in allExtraTest18:
                     expand_size += 5
                 imgLabel_tmp2 = np.zeros(
                     [imgLabel_tmp.shape[0] + expand_size * 2, imgLabel_tmp.shape[1] + expand_size * 2], dtype=np.uint8)
                 imgLabel_tmp2[expand_size:-expand_size, expand_size:-expand_size] = imgLabel_tmp
                 imgLabel_tmp = imgLabel_tmp2
 
-            if filename in extraTest18:
+            if filename in allExtraTest18:
                 changeWaterLable(imgLabel_tmp)
             if filename in allWater18:
                 imgLabel_tmp[imgLabel_tmp == 1] = 3
@@ -266,21 +276,26 @@ for epoch in epoch_list:
             else:
                 predict_ind = torch.argmax(predict[0], dim=1)  # 尽量让Bisenet也这样，部署的时候直接修改返回值即可！
 
+
             count_right += torch.sum(predict_ind == labelData).item()  # 全部训练
             # count_right += torch.sum((predictIndex == label) & (label != 0)).item()
             count_tot += torch.sum(labelData != 255).item()  # 一定是255 和前面需要对应起来
             predict_ind = predict_ind.cpu().detach().numpy()
+
+            labelData = labelData.cpu().detach().numpy()
             end = time.time()
             # print("average cost time : ", (end - start) / predict_ind.shape[0])
 
             predict_list.extend(predict_ind)
             # print(np.unique(predict_ind))
-            if (int(epoch) + 1) % 10 != 0 and model_select != 9:
-                continue
-            # 渲染
-            if model_select == 9:
-                if (int(epoch) + 1) % 5 != 0:
-                    continue
+            # if (int(epoch) + 1) % 10 != 0 and model_select != 9:
+            #     continue
+            # # 渲染
+            # if FOR_TESTSET == 4:
+            #     continue
+            # if model_select == 9:
+            #     if (int(epoch) + 1) % 5 != 0:
+            #         continue
             png_num = predict_ind.shape[0]
             for png_i in range(png_num):
                 png_path_single = all_png_path + file_tmp[png_i] + '.png'
@@ -303,6 +318,16 @@ for epoch in epoch_list:
                     predict_ind_mask = predict_ind[png_i][2:-2, 2:-2]
                 else:
                     predict_ind_mask = predict_ind[png_i]
+
+                predict_ind_dilate_open = None
+                if dilate_open_used:
+                    predict_ind_dilate_open = predict_ind_mask[15:-15, 15:-15].copy()
+                    predict_ind_dilate_open = dilate_open(predict_ind_dilate_open)
+                    predict_dilate_open_list.extend(predict_ind_dilate_open)
+                    # print(predict_ind_dilate_open.shape)
+                    # print('labelData', labelData[png_i].shape)
+                    count_right_dilate_open += np.sum(predict_ind_dilate_open == labelData[png_i])  # 全部训练
+
                 imgRes = imgGt
                 for color_num in range(1, class_nums):
                     imgRes = mask_color_img(imgRes, mask=(predict_ind_mask == color_num),
@@ -312,18 +337,29 @@ for epoch in epoch_list:
                 cv2.imwrite(result_label_dir + file_tmp[png_i] + '.png', predict_ind_mask)
         # gc.collect()
     accuracy = count_right / count_tot
+    accuracy_dilate = count_right_dilate_open / count_tot
     print('epoch ' + epoch + ' accuracy: ', accuracy)
+    print('after dilate open accuracy: ', accuracy_dilate)
 
     label_list = np.array(label_list).flatten()
     predict_list = np.array(predict_list).flatten()
     ind = (label_list != 255)  # 一定要加这个
     predict_list = predict_list[ind]
     label_list = label_list[ind]
+    if dilate_open_used:
+        predict_dilate_open_list = np.array(predict_dilate_open_list).flatten()
+        predict_dilate_open_list = predict_dilate_open_list[ind]
 
     target_names = ['other', 'skin_', 'cloth', 'water']
     # print(set(list(label_list)))
     # print(set(list(predict_list)))
     res = classification_report(label_list, predict_list, target_names=target_names, output_dict=True)
+    res_dilate = None
+    kappa_score_dilate = None
+    if dilate_open_used:
+        res_dilate = classification_report(label_list, predict_dilate_open_list, target_names=target_names,
+                                           output_dict=True)
+        kappa_score_dilate = cohen_kappa_score(label_list, predict_dilate_open_list)
     kappa_score = cohen_kappa_score(label_list, predict_list)  # 计算卡帕系数
     # accuracy = count_right / count_tot
     # print('epoch ' + epoch + ' accuracy: ',accuracy)
@@ -338,6 +374,18 @@ for epoch in epoch_list:
           'kappa_score: ', kappa_score)
     print('\n')
     f2_csv.writerow(csv2_line)
+    if dilate_open_used:
+        print('after dilate open:')
+        csv2_line = [epoch, res_dilate['accuracy'], res_dilate['macro avg']['f1-score'], kappa_score_dilate]
+        # print('accuracy=', accuracy, 'micro=', micro, 'macro', macro)
+        for k in target_names:
+            # print(k,'skin pre=', res['skin']['precision'], 'skin rec=', res['skin']['recall'])
+            print(k, ' pre=', res_dilate[k]['precision'], ' rec=', res_dilate[k]['recall'], ' f1-score=', res_dilate[k]['f1-score'])
+            csv2_line.extend([res_dilate[k]['precision'], res_dilate[k]['recall'], res_dilate[k]['f1-score']])
+        print(epoch, 'all test micro accuracy:', res_dilate['accuracy'], 'macro avg :', res_dilate['macro avg']['f1-score'],
+              'kappa_score: ', kappa_score_dilate)
+        print('\n')
+        f2_csv.writerow(csv2_line)
 f2.close()
 # csv2_header = ['epoch', 'micro accuracy','macro avg f1','other_pre','other_rec','other_f1',
 #                'skin_pre', 'skin_rec','skin_f1','cloth_pre', 'cloth_rec','cloth_f1',
